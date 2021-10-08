@@ -2,13 +2,15 @@
 #include "Server.hpp"
 #include "Client.hpp"
 
+#include <iostream> // debug
+
 Task::Task()
 {
 }
 
 Task::Task(Task const &src)
 {
-	*this =src;
+	*this = src;
 }
 
 Task::~Task()
@@ -22,6 +24,34 @@ Task		&Task::operator=(Task const &src)
 	this->server = src.server;
 	this->client = src.client;
 	return *this;
+}
+
+void		Task::printType()
+{
+	switch(this->type)
+	{
+		case WAIT_FOR_CONNECTION:
+			std::cout << "Wait for connection";
+			break;
+		case CLIENT_READ:
+			std::cout << "Client read";
+			break;
+		case CLIENT_RESPONSE:
+			std::cout << "Client response";
+			break;
+		case FILE_READ:
+			std::cout << "file read";
+			break;
+		case FILE_WRITE:
+			std::cout << "file write";
+			break;
+		case FILE_DELETE:
+			std::cout << "file delete";
+			break;
+		default:
+			std::cout << "WTF";
+	}
+	std::cout << std::endl;
 }
 
 Task::Task(TaskType type, int fd, Server *server, Client *client) :

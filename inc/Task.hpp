@@ -16,7 +16,8 @@ class Task
 			CLIENT_READ,
 			CLIENT_RESPONSE,
 			FILE_READ,
-			FILE_WRITE
+			FILE_WRITE,
+			FILE_DELETE
 		};
 
 		// Coplien form stuff
@@ -24,6 +25,8 @@ class Task
 		Task(Task const &src);
 		virtual ~Task();
 		Task			&operator=(Task const &src);
+
+		void			printType();
 	
 		// Parameterized constructor
 		Task(TaskType type, int fd, Server *server, Client *client);

@@ -1,6 +1,7 @@
 #ifndef PARSER_HPP
 #define PARSER_HPP
 
+#include <string>
 #include <vector>
 #include "ServerConfig.hpp"
 
@@ -8,22 +9,26 @@ class Parser
 {
 	public:
 		//constructors()
-			~Parser();
+			virtual ~Parser();
 			Parser();
-			Parser(std::string filename);
-			Parser(Parser const& src);
-			Parser const& operator=(Parser const& src);
+			Parser(const Parser&);
+			Parser& operator=(const Parser&);
+			void	init(const std::string&);
 
 		//get()
-			size_t	getNumServers() const;
-
+			size_t								getAmountServers() const;
+			const std::vector<ServerConfig>&	getServerConfigs() const;
+			const ServerConfig&					getServerConfigs(size_t index) const;
+	
 	private:
 		std::string					_filename;
 		std::string					_filecontent;
-		size_t						_numberOfServers;
-		std::vector<Serverconfig>	_serverConfigs;
+		std::vector<ServerConfig>	_serverConfigs;
 
-		void	createServerconfig();
+		void	readConfigfile();
+		void	syntaxErrorCheck() const;
+		void	semicolons() const;
+		void	createServerConfig();
 };
 
 #endif

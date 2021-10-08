@@ -18,14 +18,15 @@ int		main(int argc, char **argv)
 		std::cout << "Too many arguments" << std::endl;
 		return EXIT_FAILURE;
 	}
-
 	try
 	{
-		webServer.setup();
+		parser.init(configFile);
+		webServer.setup(parser.getServerConfigs());
 		webServer.run();
 	}
 	catch (std::exception &e)
 	{
+		std::cout << "main error" << std::endl;
 		std::cerr << "Error: " << e.what() << std::endl;
 	}
 }

@@ -1,7 +1,8 @@
 #ifndef CLIENT_HPP
 # define CLIENT_HPP
 
-# include <string>
+# include "Request.hpp"		// Request
+# include "Response.hpp"	// Response
 
 class Client
 {
@@ -16,16 +17,16 @@ class Client
 		Client(int socketFD);
 
 		// Public functions
-		std::string		&getRequest();
-		void			setRequest(std::string const &message);
+		Request			&getRequest();
+		Response		&getResponse();
 
 		// Public variables
 		int					fd;
 
 	private:
 		// Private variables
-		std::string			_request;
-		std::string			_response;
+		Request				_request;
+		Response			_response;
 };
 
 #endif

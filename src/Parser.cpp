@@ -1,58 +1,9 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <algorithm>
 #include "Parser.hpp"
-
-static size_t	getCurlyBraceOpen(std::string str, size_t start)
-{
-	return (str.find('{', start));
-}
-
-static size_t	getCurlyBraceClose(std::string str, size_t start)
-{
-	size_t	pos = start + 1;
-	uint	open_curly = 1;
-
-	while (pos != std::string::npos && open_curly != 0)
-	{
-		if (str[pos] == '{')
-			open_curly++;
-		else if (str[pos] == '}')
-			open_curly--;
-		pos++;
-	}
-	return (pos);
-}
-
-static std::string	getCurlyBraceSubstr(std::string str, size_t start, size_t end)
-{
-	return (str.substr(start, end - start));
-}
-
-static std::string readConfigfile(std::string& filename)
-{
-	std::string		line;
-	std::string		filecontent;
-	std::ifstream	ifs;
-
-	ifs.open(filename);
-	if (!ifs)
-	{
-		std::cout << std::strerror(errno) << std::endl;
-		exit(0);
-	}
-	getline(ifs, line);
-	filecontent += line;
-	while (!ifs.eof())
-	{
-		getline(ifs, line);
-		filecontent += "\n";
-		filecontent += line;
-	}
-	ifs.close();
-	return (filecontent);
-}
+#include "StringUtils.hpp"
+#include <iostream>
+#include <string>
+#include <vector>
+#include <fstream>
 
 Parser::~Parser(void)
 {
@@ -62,41 +13,135 @@ Parser::Parser(void)
 {
 }
 
-Parser::Parser(std::string filename) : _filename(filename)
-{
-	this->_filecontent = readConfigfile(this->_filename);
-	createServerconfig();
-}
-
-Parser::Parser(Parser const& src)
+Parser::Parser(const Parser& src)
 {
 	*this = src;
 }
 
-Parser const& Parser::operator=(Parser const& src)
+Parser& Parser::operator=(const Parser& src)
 {
-	(void)src;
+	this->_filename = src._filename;
+	this->_filecontent = src._filecontent;
+	this->_serverConfigs = src._serverConfigs;
 	return (*this);
 }
 
-void	Parser::createServerconfig()
+void	Parser::init(const std::string& configFile)
 {
-	size_t	count = 0;
+	this->_filename = configFile;
+	readConfigfile();
+	syntaxErrorCheck();
+	semicolons();
+	createServerConfig();
+}
+
+size_t	Parser::getAmountServers() const
+{
+	return (this->_serverConfigs.size());
+}
+
+const std::vector<ServerConfig>&	Parser::getServerConfigs() const
+{
+	return (this->_serverConfigs);
+}
+
+const ServerConfig&	Parser::getServerConfigs(size_t index) const
+{
+	return (this->_serverConfigs[index]);
+}
+
+void	Parser::readConfigfile()
+{
+	std::ifstream	ifs;
+
+	ifs.open(this->_filename);
+	if (!ifs)
+		throw std::runtime_error("input filestream open error");
+	getline(ifs, this->_filecontent, '\0');
+	ifs.close();
+}
+
+void	Parser::syntaxErrorCheck() const
+{
+	size_t	countOpen = 0;
+	size_t	countClose = 0;
 	size_t	pos = 0;
 
-	pos = this->_filecontent.find("server", pos);
 	while (pos != std::string::npos)
 	{
-		count++;
-		size_t bodyOpen = getCurlyBraceOpen(this->_filecontent, pos);
-		size_t bodyClose = getCurlyBraceClose(this->_filecontent, bodyOpen + 1);
-		//std::cout << "" << getCurlyBracesubstr(this->_filecontent, bodyOpen, bodyClose) << std::endl;;
-		std::string serverConfBody = getCurlyBraceSubstr(this->_filecontent, bodyOpen, bodyClose);
-		Serverconfig newServer(serverConfBody);
-		this->_serverConfigs.push_back(newServer);
-		pos = this->_filecontent.find("server", bodyClose + 1);
+		if (this->_filecontent[pos] == '{')
+			countOpen++;
+		else if (this->_filecontent[pos] == '}')
+			countClose++;
+		pos = this->_filecontent.find_first_of("{}", pos + 1);
 	}
-	std::cout << "num of servers: " << this->_serverConfigs.size() << std::endl;
-	std::cout << this->_serverConfigs[0] << std::endl;
-	std::cout << this->_serverConfigs[1] << std::endl;
+	if (countOpen > countClose)
+		throw std::runtime_error("configfile: missing ('}')");
+	if (countClose > countOpen)
+		throw std::runtime_error("configfile: extraneous closing brace ('}')");
+}
+
+// static bool	isEndSemicolon(const std::string& str)
+// {
+// 	size_t pos = str.find_last_not_of(" \t\n");
+// 	if (pos == std::string::npos)
+// 		return (false);
+// 	return (str[pos] == ';');
+// }
+
+void	Parser::semicolons() const
+{
+	return;
+	// std::string	str = this->_filecontent;
+
+	// std::vector<std::string> lines;
+	// StringUtils::splitNoBraces(str, "\n", lines);
+	// //printVec(lines);
+	// for (size_t i = 0; i < lines.size(); i++)
+	// {
+	// 	std::cout << isEndSemicolon(lines[i]) << " - " << lines[i] << std::endl;
+	// 	if (isEndSemicolon(lines[i]) == false)
+	// 	{
+	// 		if (lines[i].find_last_not_of(" \t\n", 0) == '}')
+	// 			continue;
+	// 		if (lines[i].find_last_not_of(" \t\n", 0) == '{')
+	// 			continue;
+	// 		if (i + 1 < lines.size())
+	// 		{
+	// 			std::cout << "we ++ " << std::endl;
+	// 			i++;
+	// 		}
+	// 		else
+	// 			throw std::runtime_error("configfile: missing semicolon");
+	// 		//std::cout << "check " << lines[i] << std::endl;
+	// 		if (lines[i].find_last_not_of(" \t\n", 0) == '{')
+	// 		{
+	// 			std::cout << "inhere" << std::endl;
+	// 			continue;
+	// 		}
+	// 		//std::cout << "theows last" << i << std::endl;
+	// 		throw std::runtime_error("configfile: missing semicolon");
+	// 	}
+	// }
+}
+
+void	Parser::createServerConfig()
+{
+	std::vector<std::string>	lines;
+
+	StringUtils::splitServers(this->_filecontent, lines);
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		if (!lines[i].compare(0, 6, "server"))
+		{
+			std::string serverBlock = lines[i].substr(6, lines[i].length() - 6);
+			ServerConfig newServer;
+			newServer.init(serverBlock);
+			this->_serverConfigs.push_back(newServer);
+		}
+		else
+			throw std::runtime_error("configfile: unidentified input");
+ 	}
+	if (this->_serverConfigs.size() == 0)
+		throw std::runtime_error("configfile: missing server(s)");
 }

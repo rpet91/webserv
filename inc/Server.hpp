@@ -1,30 +1,37 @@
 #ifndef SERVER_HPP
 # define SERVER_HPP
 
-# include "ServerConfig.hpp"
-# include "Task.hpp"
-# include "Client.hpp"
-# include <string>
+# include "ServerConfig.hpp"	// ServerConfig
+# include "Task.hpp"			// Task
+# include <string>				// std::string
 
 class Task; // Forward declaration Task
 
 class Server
 {
 	public:
-		Server();
+		// Coplien form
 		Server(Server const &src);
 		virtual ~Server();
+		Server		&operator=(Server const &src);
 
-		Server	&operator=(Server const &src);
-		void	handleConnection(Client &client, Task &task);
+		// Parameterized constructor
+		Server(ServerConfig const &conf);
+
+		// Public functions
+		const ServerConfig	&getConfig() const;
+		void				handleConnection(Task &task);
 	
 	private:
+		// Private default constructor
+		Server();
 
-		void	_handleGetMethod(char const *pathName, Task &task);
-		void	_handlePostMethod(char const *pathName, Task &task);
-		void	_handleDeleteMethod(char const *pathName, Task &task);
-		// Many of the private variables will be replaced with a ServerConfig
-		// object eventually
+		// Private functions
+		int			_openFile(Task &client, std::string &pathName);
+		void		_checkErrorPath(Task &task);
+
+		// Private variables
+		ServerConfig	_config;
 };
 
 #endif

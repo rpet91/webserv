@@ -1,11 +1,12 @@
-#include "Client.hpp"
-#include <string>
+#include "Client.hpp"			// Client
+#include "Request.hpp"			// Request
+#include "Response.hpp"			// Response
 
 
 // debug
 #include <iostream>
 
-Client::Client()
+Client::Client() : _request(Request()), _response(Response())
 {
 }
 
@@ -14,7 +15,7 @@ Client::Client(Client const &src)
 	*this = src;
 }
 
-Client		&Client::operator=(Client const &src)
+Client			&Client::operator=(Client const &src)
 {
 	this->fd = src.fd;
 	this->_request = src._request;
@@ -26,16 +27,16 @@ Client::~Client()
 {
 }
 
-Client::Client(int socketFD) : fd(socketFD)
+Client::Client(int socketFD) : fd(socketFD), _request(Request()), _response(Response())
 {
 }
 
-std::string		&Client::getRequest()
+Request			&Client::getRequest()
 {
 	return this->_request;
 }
 
-void			Client::setRequest(std::string const &message)
+Response		&Client::getResponse()
 {
-	this->_request = message;
+	return this->_response;
 }

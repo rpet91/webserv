@@ -2,12 +2,13 @@ NAME =			webserv
 
 CC =			clang++
 CFLAGS =		-Wall -Werror -Wextra -std=c++98 -pedantic
+UNUSED = 		-Wno-unused-variable -Wno-unused-parameter -Wno-unused-function -Wno-unused-private-field
 
 SDIR =			src
 ODIR =			obj
 IDIR =			inc
 
-CLASSES =		Server Parser ServerConfig WebServer Task Client
+CLASSES =		Server Parser ServerConfig LocationConfig StringUtils WebServer Task Client Request Response
 
 _OBJS =			main $(CLASSES)
 OBJS =			$(addsuffix .o, $(addprefix $(ODIR)/, $(_OBJS)))
@@ -17,7 +18,7 @@ ifeq ($(DEBUG),1)
 	CFLAGS += -fsanitize=address -g3
 endif
 
-.PHONY: all clean fclean re debug
+.PHONY: all clean fclean re debug test
 
 all: $(NAME)
 
@@ -39,3 +40,7 @@ re: fclean all
 
 debug:
 	@make DEBUG=1
+
+test: all
+	clear
+	./webserv
