@@ -39,11 +39,13 @@ class WebServer
 									std::string const &source,
 									std::string const &delimiter);
 		void					_readFile(Task &task);
+		void					_writeFile(Task &task);
 		void					_sendResponse(Task &task);
 		void					_addTask(Task &task);
 		void					_markFDForRemoval(int fd, fd_set &set, TaskIOType mode);
 		void					_debugPrintFDsInSet(fd_set &set, int max);
 		void					_replaceDefaultErrorMessage(std::string &body, int errorCode);
+		bool					_isError(int code);
 		void					_errorResponsesSetup();
 		TaskIOType				_getTaskIOType(Task &task);
 

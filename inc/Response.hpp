@@ -13,20 +13,21 @@ class Response
 		virtual ~Response();
 
 		// Public functions
-		void			resetResponse();
+		void			reset();
 		void			setBody(std::string const &body);
 		void			setHeader(std::string const &header);
 		void			setStatusCode(int code);
 		void			setDefaultError();
 		std::string		getBody();
-		std::string		getHeader();
+		std::string		getHeaders();
 		int				getStatusCode();
 		bool			isDefaultError();
+		std::string		getResponseText(std::string const &statusText);
 
 	private:
 		// Private variables
 		std::string		_body;
-		std::string		_header;
+		std::string		_headers;
 		int				_statusCode;
 		bool			_defaultError;
 };

@@ -143,6 +143,13 @@ void		WebServer::run()
 					this->_markFDForRemoval(it->first, this->_writeable, WRITE);
 					FD_CLR(it->first, &this->_writeable);
 				}
+				else if (currentTask.type == Task::FILE_WRITE)
+				{
+					std::cout << "Lekkchr raiteh" << std::endl;
+					this->_writeFile(currentTask);
+					this->_markFDForRemoval(it->first, this->_readable, READ);
+					std::cout << "Lekkchr gerait" << std::endl;
+				}
 				else
 				{
 					std::cout << "Something went wrong: unknown write task type" << std::endl;
@@ -329,7 +336,7 @@ void		WebServer::_processRequest(Client &client, std::string requestMessage)
 
 	// Process the first line into the separate pieces of information.
 	lineStart = 0;
-	client.getRequest().setMethod(Request::mapStringToRequestMethod(this->_getString(&lineStart, requestMessage, " ")));
+	client.getRequest().setMethod(this->_getString(&lineStart, requestMessage, " "));
 	client.getRequest().setURI(this->_getString(&lineStart, requestMessage, " "));
 	client.getRequest().setProtocol(this->_getString(&lineStart, requestMessage, "\r\n"));
 
@@ -452,29 +459,46 @@ void		WebServer::_readFile(Task &task)
 }
 
 /*
+ *
+ */
+void		WebServer::_writeFile(Task &task)
+{
+	std::cout << "het is tijd om te schrijven" << std::endl;
+	(void) task;
+	exit(0);
+}
+
+/*
  * This function sends a response back to the client.
  */
 void		WebServer::_sendResponse(Task &task)
 {
 	std::cout << "sending respones :) " << std::endl;
-	std::string		response;
-	std::string		body;
+	int					statusCode;
+	std::string			responseString;
+	std::string			body;
+	std::stringstream	contentLength;
 
 	Client	*client = task.client;
-	if (client->getResponse().getStatusCode() && task.client->getResponse().isDefaultError() == true)
+	Response	&response = client->getResponse();
+	statusCode = response.getStatusCode();
+	if (this->_isError(statusCode) && response.isDefaultError() == true)
 	{
-		std::cout << "error code: " << client->getResponse().getStatusCode() << std::endl;
+		std::cout << "error code: " << statusCode << std::endl;
 		body = this->_defaultError;
-		_replaceDefaultErrorMessage(body, client->getResponse().getStatusCode());
+		_replaceDefaultErrorMessage(body, statusCode);
+		response.setBody(body);
 	}
 	else
-		body = client->getResponse().getBody();
-	response = "HTTP/1.1 200 OK\r\nContent-Length: "; //200 ok hardcoded joepie
-	response += std::to_string(body.size());
-	response += "\r\n\r\n";
-	response += body;
-	int		ret = send(client->fd, response.c_str(), response.size() + 1, 0);
+		body = response.getBody();
+	contentLength << "Content-Length: " << body.size();
+	response.setHeader(contentLength.str());
+	responseString = response.getResponseText(this->_errorResponses[response.getStatusCode()]);
+	//std::cout << "SENDING:" << std::endl << std::endl << responseString << std::endl << std::endl;
+	int		ret = send(client->fd, responseString.c_str(), responseString.size() + 1, 0);
+	response.reset();
 	(void)ret;
+	// error check?
 }
 
 /*
@@ -541,11 +565,22 @@ void		WebServer::_replaceDefaultErrorMessage(std::string &body, int errorCode)
 }
 
 /*
+ * A boolean function that returns true when the status code is an error.
+ */
+bool		WebServer::_isError(int code)
+{
+	if (code == 200)
+		return false;
+	return true;
+}
+
+/*
  * This function puts all the possible HTML errors in a map
  */
 void		WebServer::_errorResponsesSetup()
 {
-	this->_defaultError = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<title>Spinnenwebservetjes</title>\r\n</head>\r\n<body>\r\n<h1>HTTP error: ERROR_CODE ERROR_MESSAGE</h1>\r\n<p>&copy; Spinnenwebservetjes</p>\r\n</body>\r\n</html>\r\n";
+	this->_defaultError = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<title>Spinnenwebservetjes</title>\r\n<style>\r\nbody{background: url('/spin.png');\r\nbackground-repeat: no-repeat; background-position-y: 100px;}\r\n</style>\r\n</head>\r\n<body>\r\n<h1>Our Default HTTP error: ERROR_CODE ERROR_MESSAGE</h1>\r\n<p>&copy; Spinnenwebservetjes</p>\r\n</body>\r\n</html>\r\n";
+	this->_errorResponses[200] = "OK";
 	this->_errorResponses[400] = "Bad Request";
 	this->_errorResponses[403] = "Forbidden";
 	this->_errorResponses[404] = "Not Found";

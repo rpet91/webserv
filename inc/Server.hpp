@@ -29,6 +29,8 @@ class Server
 		// Private functions
 		int			_openFile(Task &client, std::string &pathName);
 		void		_checkErrorPath(Task &task);
+		bool		_isValidPath(std::string const &path);
+		int			_isValidContentLength(Task &task);
 
 		// Private variables
 		ServerConfig	_config;

@@ -22,20 +22,17 @@ class Request
 		virtual ~Request();
 		Request								&operator=(Request const &src);
 
-		// Static method
-		static RequestMethod				mapStringToRequestMethod(std::string const &str);
-
 		// Getters and setters
-		RequestMethod						getMethod() const;
-		std::string							getURI() const;
-		std::string							getProtocol() const;
-		std::string							getHeader(std::string const &headerName);
-		std::string							getBody() const;
-		void								setMethod(RequestMethod method);
-		void								setURI(std::string const &URI);
-		void								setProtocol(std::string const &protocol);
-		void								setHeader(std::string const &header);
-		void								setBody(std::string const &body);
+		RequestMethod			getMethod() const;
+		std::string				getURI() const;
+		std::string				getProtocol() const;
+		std::string				getHeader(std::string const &headerName);
+		std::string				getBody() const;
+		void					setMethod(std::string const &method);
+		void					setURI(std::string const &URI);
+		void					setProtocol(std::string const &protocol);
+		void					setHeader(std::string const &header);
+		void					setBody(std::string const &body);
 
 	private:
 		// Private variables
@@ -44,6 +41,9 @@ class Request
 		std::string							_protocol;
 		std::map<std::string, std::string>	_headers;
 		std::string							_body;
+
+		// Private functions
+		RequestMethod			_mapStringToRequestMethod(std::string const &str);
 };
 
 #endif
