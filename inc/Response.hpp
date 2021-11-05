@@ -22,6 +22,7 @@ class Response
 		std::string		getHeaders();
 		int				getStatusCode();
 		bool			isDefaultError();
+		bool			isError();
 		std::string		getResponseText(std::string const &statusText);
 
 	private:

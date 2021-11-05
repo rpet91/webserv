@@ -31,7 +31,7 @@ void	Parser::init(const std::string& configFile)
 	this->_filename = configFile;
 	readConfigfile();
 	syntaxErrorCheck();
-	semicolons();
+	semicolonsErrorCheck();
 	createServerConfig();
 }
 
@@ -81,60 +81,54 @@ void	Parser::syntaxErrorCheck() const
 		throw std::runtime_error("configfile: extraneous closing brace ('}')");
 }
 
-// static bool	isEndSemicolon(const std::string& str)
-// {
-// 	size_t pos = str.find_last_not_of(" \t\n");
-// 	if (pos == std::string::npos)
-// 		return (false);
-// 	return (str[pos] == ';');
-// }
-
-void	Parser::semicolons() const
+static bool	isEndSemicolon(const std::string& str)
 {
-	return;
-	// std::string	str = this->_filecontent;
+	size_t pos = str.find_last_not_of(" \t\n");
+	if (pos == std::string::npos)
+		return (false);
+	return (str[pos] == ';');
+}
 
-	// std::vector<std::string> lines;
-	// StringUtils::splitNoBraces(str, "\n", lines);
-	// //printVec(lines);
-	// for (size_t i = 0; i < lines.size(); i++)
-	// {
-	// 	std::cout << isEndSemicolon(lines[i]) << " - " << lines[i] << std::endl;
-	// 	if (isEndSemicolon(lines[i]) == false)
-	// 	{
-	// 		if (lines[i].find_last_not_of(" \t\n", 0) == '}')
-	// 			continue;
-	// 		if (lines[i].find_last_not_of(" \t\n", 0) == '{')
-	// 			continue;
-	// 		if (i + 1 < lines.size())
-	// 		{
-	// 			std::cout << "we ++ " << std::endl;
-	// 			i++;
-	// 		}
-	// 		else
-	// 			throw std::runtime_error("configfile: missing semicolon");
-	// 		//std::cout << "check " << lines[i] << std::endl;
-	// 		if (lines[i].find_last_not_of(" \t\n", 0) == '{')
-	// 		{
-	// 			std::cout << "inhere" << std::endl;
-	// 			continue;
-	// 		}
-	// 		//std::cout << "theows last" << i << std::endl;
-	// 		throw std::runtime_error("configfile: missing semicolon");
-	// 	}
-	// }
+void	Parser::semicolonsErrorCheck() const
+{
+	std::string					str = this->_filecontent;
+	size_t						pos;
+	std::vector<std::string> 	lines;
+
+	StringUtils::splitNoBraces(str, "\n", lines);
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		if (isEndSemicolon(lines[i]) == false)
+		{
+			pos = lines[i].find_last_not_of(" \t\n");
+			if (lines[i][pos] == '}')
+				continue;
+			pos = lines[i].find_last_not_of(" \t\n");
+			if (lines[i][pos] == '{')
+				continue;
+			if (i + 1 < lines.size())
+				i++;
+			else
+				throw std::runtime_error("configfile: missing semicolon (1)");
+			pos = lines[i].find_last_not_of(" \t\n");
+			if (lines[i][pos] == '{')
+				continue;
+			throw std::runtime_error("configfile: missing semicolon (2)");
+		}
+	}
 }
 
 void	Parser::createServerConfig()
 {
+	const std::string			id = "server";
 	std::vector<std::string>	lines;
 
 	StringUtils::splitServers(this->_filecontent, lines);
 	for (size_t i = 0; i < lines.size(); i++)
 	{
-		if (!lines[i].compare(0, 6, "server"))
+		if (!lines[i].compare(0, id.size(), id))
 		{
-			std::string serverBlock = lines[i].substr(6, lines[i].length() - 6);
+			std::string serverBlock = lines[i].substr(id.size(), lines[i].length() - id.size());
 			ServerConfig newServer;
 			newServer.init(serverBlock);
 			this->_serverConfigs.push_back(newServer);

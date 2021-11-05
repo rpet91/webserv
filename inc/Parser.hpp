@@ -27,7 +27,7 @@ class Parser
 
 		void	readConfigfile();
 		void	syntaxErrorCheck() const;
-		void	semicolons() const;
+		void	semicolonsErrorCheck() const;
 		void	createServerConfig();
 };
 

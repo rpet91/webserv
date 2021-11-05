@@ -149,5 +149,8 @@ void	StringUtils::matchIdentifier(const std::string& str, std::string& identifie
 	std::vector<std::string> vec;
 
 	StringUtils::split(str, WHITESPACES, vec);
-	identifier = vec[0];
+	if (vec.size())
+		identifier = vec[0];
+	else
+		identifier = "";
 }

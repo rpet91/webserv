@@ -8,7 +8,7 @@ SDIR =			src
 ODIR =			obj
 IDIR =			inc
 
-CLASSES =		Server Parser ServerConfig LocationConfig StringUtils WebServer Task Client Request Response
+CLASSES =		Server Parser Config ServerConfig LocationConfig StringUtils WebServer Task Client Request Response CGI
 
 _OBJS =			main $(CLASSES)
 OBJS =			$(addsuffix .o, $(addprefix $(ODIR)/, $(_OBJS)))
@@ -35,6 +35,7 @@ clean:
 
 fclean: clean
 	$(RM) $(NAME)
+	$(RM) -rf .vscode
 
 re: fclean all
 
@@ -43,4 +44,7 @@ debug:
 
 test: all
 	clear
-	./webserv
+	./$(NAME)
+
+post: all
+	./$(NAME) config/posttest_config.conf

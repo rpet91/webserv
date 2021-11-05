@@ -52,7 +52,7 @@ void			Response::reset()
  */
 void			Response::setBody(std::string const &body)
 {
-	this->_body = body;
+	this->_body.append(body);
 }
 
 /*
@@ -104,7 +104,7 @@ int				Response::getStatusCode()
 }
 
 /*
- * this function returns true if the _defaultError variable has been set.
+ * This function returns true if the _defaultError variable has been set.
  */
 bool			Response::isDefaultError()
 {
@@ -112,7 +112,17 @@ bool			Response::isDefaultError()
 }
 
 /*
- * this function formats and returns the text that will be sent to the client.
+ * A boolean function that returns true when the status code is an error.
+ */
+bool			Response::isError()
+{
+	if (this->_statusCode == 200)
+		return false;
+	return true;
+}
+
+/*
+ * This function formats and returns the text that will be sent to the client.
  */
 std::string		Response::getResponseText(std::string const &statusText)
 {

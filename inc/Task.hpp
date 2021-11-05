@@ -3,6 +3,7 @@
 
 # include "Server.hpp"
 # include "Client.hpp"
+# include "CGI.hpp"
 
 class Server; // Forward declaration Server
 
@@ -17,7 +18,9 @@ class Task
 			CLIENT_RESPONSE,
 			FILE_READ,
 			FILE_WRITE,
-			FILE_DELETE
+			FILE_DELETE,
+			CGI_READ,
+			CGI_WRITE
 		};
 
 		// Coplien form stuff
@@ -36,6 +39,7 @@ class Task
 		int				fd;
 		Server			*server;
 		Client			*client;
+		CGI				*cgi;
 
 	private:
 };

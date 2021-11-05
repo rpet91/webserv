@@ -7,16 +7,18 @@
 #include <netinet/in.h>		// struct sockaddr_in, INADDR_ANY
 #include <stdexcept>		// std::runtime_error
 #include <vector>			// std::vector
+#include <string>			// std::string
+#include <strings.h>		// bzero
+#include <unistd.h>			// read
+#include <fcntl.h>			// fcntl, F_SETFL, O_NONBLOCK
+#include <cstdlib>			// exit
+#include <sstream>			// stringstream, istringstream
 #include "Server.hpp"		// Server
 #include "ServerConfig.hpp"	// ServerConfig
 #include "Task.hpp"			// Task
 #include "Request.hpp"		// Request
 #include "Response.hpp"		// Response
-#include <string>			// std::string, std::stoi
-#include <strings.h>		// bzero
-#include <unistd.h>			// read
-#include <fcntl.h>			// fcntl, F_SETFL, O_NONBLOCK
-#include <sstream>			// stringstream
+#include "CGI.hpp"			// CGI
 
 /*
  * The constructor is the only starting point for the WebServer. We
@@ -68,26 +70,8 @@ void		WebServer::run()
 		}
 		for (it = this->_readTaskMap.begin(); it != this->_readTaskMap.end(); it++)
 		{
-			std::cout << "Checking fd [" << it->first << "] of type: ";
-			switch (it->second.type)
-			{
-				case Task::WAIT_FOR_CONNECTION:
-					std::cout << "server socket";
-					break;
-				case Task::CLIENT_READ:
-					std::cout << "client socket";
-					break;
-				case Task::FILE_READ:
-					std::cout << "file";
-					break;
-				case Task::CLIENT_RESPONSE:
-					std::cout << "client response";
-					break;
-				default:
-					std::cout << "unknown";
-			}
-			std::cout << " for reading" << std::endl;
 			currentTask = it->second;
+			this->_debugCheckTaskFD(currentTask, "reading"); // debug
 			if (FD_ISSET(it->first, &read_tmp))
 			{
 				std::cout << "Fd " << it->first << " is set for reading" << std::endl;
@@ -105,33 +89,22 @@ void		WebServer::run()
 				{
 					std::cout << "Lekkchr lezen" << std::endl;
 					this->_readFile(currentTask);
-					this->_markFDForRemoval(it->first, this->_readable, READ);
+
 					std::cout << "Lekkchr gelezen" << std::endl;
 				}
 				else
 				{
 					std::cout << "Something went wrong: unknown read task type" << std::endl;
 					currentTask.printType();
+					std::cout << std::endl;
 					exit(EXIT_FAILURE);
 				}
 			}
 		}
 		for (it = this->_writeTaskMap.begin(); it != this->_writeTaskMap.end(); it++)
 		{
-			std::cout << "Checking fd [" << it->first << "] of type: ";
-			switch (it->second.type)
-			{
-				case Task::CLIENT_RESPONSE:
-					std::cout << "client response";
-					break;
-				case Task::FILE_WRITE:
-					std::cout << "file write";
-					break;
-				default:
-					std::cout << "unknown";
-			}
-			std::cout << " for writing" << std::endl;
 			currentTask = it->second;
+			this->_debugCheckTaskFD(currentTask, "writing"); // debug
 			if (FD_ISSET(it->first, &write_tmp))
 			{
 				// write stuff
@@ -218,7 +191,7 @@ void		WebServer::setup(std::vector<ServerConfig> const &serverConfigs)
 		tmpTask.fd = *socketIt;
 		this->_addTask(tmpTask);
 	}
-	this->_errorResponsesSetup();
+	this->_responsesSetup();
 }
 
 /*
@@ -274,7 +247,7 @@ void		WebServer::_acceptConnection(int socketFD)
 	clientSocketFD = accept(socketFD, (struct sockaddr*)&clientAddress, (socklen_t*)&addressSize);
 	fcntl(clientSocketFD, F_SETFL, O_NONBLOCK);
 	std::cout << "New fd is [" << clientSocketFD << "]" << std::endl;
-	Client				client(clientSocketFD);
+	Client				client(clientSocketFD, (struct sockaddr*)&clientAddress);
 	if (client.fd < 0)
 	{
 		perror("halp");
@@ -290,38 +263,36 @@ void		WebServer::_acceptConnection(int socketFD)
  */
 void		WebServer::_readRequest(Client &client)
 {
-	char					buffer[RECVBUFFERSIZE];
-	int						bytesRead;
-	std::string				incomingMessage;
+	char	buffer[RECVBUFFERSIZE + 1];
+	int		bytesRead;
 
 	// Read from the socket in a loop until we find '\r\n\r\n', signifying the
 	// end of the incoming message. If we read 0 bytes, the connection was
 	// closed by the client.
-	while (true)
+	bzero(buffer, RECVBUFFERSIZE + 1);
+	bytesRead = recv(client.fd, buffer, RECVBUFFERSIZE, 0);
+	std::cout << "BYTES READ: AAAAAAAAAAAAAH: " << bytesRead << std::endl;
+	if (bytesRead < 0)
 	{
-		bzero(buffer, RECVBUFFERSIZE);
-		bytesRead = recv(client.fd, buffer, RECVBUFFERSIZE, 0);
-		if (bytesRead < 0)
-			throw std::runtime_error("recv error");
-		else if (bytesRead == 0)
-		{
-			// Connection was closed on the client's side.
-			std::cout << "Closing client fd: [" << client.fd << "]" << std::endl;
-			close(client.fd);
-			this->_markFDForRemoval(client.fd, this->_readable, READ);
-			return ;
-		}
-		incomingMessage += buffer;
-		
-		break;
-		if (incomingMessage.find("\r\n\r\n") != std::string::npos)
-			break;
+		perror("bytes read < 0: ");
+		throw std::runtime_error("recv error");
 	}
+	else if (bytesRead == 0)
+	{
+		// Connection was closed on the client's side.
+		std::cout << "Closing client fd: [" << client.fd << "]" << std::endl;
+		close(client.fd);
+		this->_markFDForRemoval(client.fd, this->_readable, READ);
+		return ;
+	}
+	client.setIncomingMessage(buffer);
+	if (client.getIncomingMessage().find("\r\n\r\n") == std::string::npos)
+		return ;
 	std::cout << std::endl;
 	std::cout << "[[[[[[[[[" << std::endl;
-	std::cout << incomingMessage;
+	std::cout << client.getIncomingMessage();
 	std::cout << "]]]]]]]]]" << std::endl;
-	this->_processRequest(client, incomingMessage);
+	this->_processRequest(client, client.getIncomingMessage());
 }
 
 /*
@@ -331,6 +302,7 @@ void		WebServer::_readRequest(Client &client)
 void		WebServer::_processRequest(Client &client, std::string requestMessage)
 {
 	size_t				lineStart;
+	size_t				prevStart;
 	std::string			header;
 	std::string			body;
 
@@ -343,8 +315,9 @@ void		WebServer::_processRequest(Client &client, std::string requestMessage)
 	// Process the headers.
 	while (true)
 	{
+		prevStart = lineStart;
 		header = this->_getString(&lineStart, requestMessage, "\r\n");
-		if (header == "")
+		if (prevStart == lineStart || header == "")
 			break;
 		else
 			client.getRequest().setHeader(header);
@@ -359,29 +332,35 @@ void		WebServer::_processRequest(Client &client, std::string requestMessage)
 }
 
 /*
- * 
+ * This function finds the server that should handle the request of the client.
  */
 void		WebServer::_findServerForRequest(Client &client)
 {
-	std::string						host;
-	std::string						hostName;
-	int								port;
-	size_t							colonPosition;
-	Task							task;
-	std::vector<Server>				serversForPort;
-	bool							serverFound;
-	std::vector<Server>::iterator	serverIt;
-	ServerConfig					serverConfig;
+	std::string									host;
+	std::string									hostName;
+	int											port;
+	size_t										colonPosition;
+	Task										task;
+	std::vector<Server>							serversForPort;
+	bool										serverFound;
+	std::vector<Server>::iterator				serverIt;
+	ServerConfig								serverConfig;
 	std::vector<std::string>::const_iterator	nameIt;
 
 	task.client = &client;
 
 	// Find the port and hostname.
 	host = client.getRequest().getHeader("Host");
+	if (host == "")
+	{
+		std::cout << "Host header not found, panic and die" << std::endl;
+		exit(EXIT_FAILURE);
+	}
 	std::cout << "{" << host << "}" << std::endl;
 	colonPosition = host.find(":");
 	hostName = host.substr(0, colonPosition);
 	port = std::stoi(host.substr(colonPosition + 1));
+//	std::istringstream(host.substr(colonPosition + 1)) >> port;
 	std::cout << hostName << "," << port << std::endl;
 
 	// Get the servers for this port.
@@ -397,6 +376,7 @@ void		WebServer::_findServerForRequest(Client &client)
 		{
 			if (*nameIt == hostName)
 			{
+				client.getRequest().setMatchedServerName(hostName);
 				serverIt->handleConnection(task);
 				serverFound = true;
 				break;
@@ -405,7 +385,11 @@ void		WebServer::_findServerForRequest(Client &client)
 	}
 	// Drop to the default if we haven't found a suitable server in the list.
 	if (!serverFound)
+	{
+		serverConfig = serversForPort[0].getConfig();
+		client.getRequest().setMatchedServerName(serverConfig.getDefaultServerName());
 		serversForPort[0].handleConnection(task);
+	}
 	this->_addTask(task);
 }
 
@@ -431,30 +415,31 @@ std::string		WebServer::_getString(size_t *startPosition, std::string const &sou
 void		WebServer::_readFile(Task &task)
 {
 	std::cout << "It's time to do shit here" << std::endl;
-	char		buffer[READBUFFERSIZE];
+	char		buffer[READBUFFERSIZE + 1];
 	int			bytesRead;
 	std::string	fileRead;
 	Task		responseTask;
 
-	while (true)
+	bzero(buffer, READBUFFERSIZE + 1);
+	bytesRead = read(task.fd, buffer, READBUFFERSIZE);
+	if (bytesRead < 0)
 	{
-		bzero(buffer, READBUFFERSIZE);
-		bytesRead = read(task.fd, buffer, READBUFFERSIZE);
-		if (bytesRead < 0)
-		{
-			perror("stuk");
-			throw std::runtime_error("read error");
-		}
-		else if (bytesRead == 0)
-			break ;
-		fileRead.append(buffer, bytesRead);
+		perror("stuk");
+		throw std::runtime_error("read error");
 	}
-	task.client->getResponse().setBody(fileRead);
+	else if (bytesRead > 0)
+	{
+		fileRead.append(buffer, bytesRead);
+		task.client->getResponse().setBody(fileRead);
+		return ;
+	}
+
 	close(task.fd);
 	responseTask.type = Task::CLIENT_RESPONSE;
 	responseTask.client = task.client;
 	responseTask.fd = task.client->fd;
 	this->_addTask(responseTask);
+	this->_markFDForRemoval(task.fd, this->_readable, READ);
 	std::cout << "done doing shit" << std::endl;
 }
 
@@ -482,7 +467,7 @@ void		WebServer::_sendResponse(Task &task)
 	Client	*client = task.client;
 	Response	&response = client->getResponse();
 	statusCode = response.getStatusCode();
-	if (this->_isError(statusCode) && response.isDefaultError() == true)
+	if (response.isError() && response.isDefaultError() == true)
 	{
 		std::cout << "error code: " << statusCode << std::endl;
 		body = this->_defaultError;
@@ -493,7 +478,7 @@ void		WebServer::_sendResponse(Task &task)
 		body = response.getBody();
 	contentLength << "Content-Length: " << body.size();
 	response.setHeader(contentLength.str());
-	responseString = response.getResponseText(this->_errorResponses[response.getStatusCode()]);
+	responseString = response.getResponseText(this->_responseStatus[response.getStatusCode()]);
 	//std::cout << "SENDING:" << std::endl << std::endl << responseString << std::endl << std::endl;
 	int		ret = send(client->fd, responseString.c_str(), responseString.size() + 1, 0);
 	response.reset();
@@ -560,32 +545,23 @@ void		WebServer::_replaceDefaultErrorMessage(std::string &body, int errorCode)
 	}
 	if ((pos = body.find(replaceMessage)) != std::string::npos)
 	{
-		body = body.replace(pos, replaceMessage.length(), this->_errorResponses[errorCode]);
+		body = body.replace(pos, replaceMessage.length(), this->_responseStatus[errorCode]);
 	}
-}
-
-/*
- * A boolean function that returns true when the status code is an error.
- */
-bool		WebServer::_isError(int code)
-{
-	if (code == 200)
-		return false;
-	return true;
 }
 
 /*
  * This function puts all the possible HTML errors in a map
  */
-void		WebServer::_errorResponsesSetup()
+void		WebServer::_responsesSetup()
 {
-	this->_defaultError = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<title>Spinnenwebservetjes</title>\r\n<style>\r\nbody{background: url('/spin.png');\r\nbackground-repeat: no-repeat; background-position-y: 100px;}\r\n</style>\r\n</head>\r\n<body>\r\n<h1>Our Default HTTP error: ERROR_CODE ERROR_MESSAGE</h1>\r\n<p>&copy; Spinnenwebservetjes</p>\r\n</body>\r\n</html>\r\n";
-	this->_errorResponses[200] = "OK";
-	this->_errorResponses[400] = "Bad Request";
-	this->_errorResponses[403] = "Forbidden";
-	this->_errorResponses[404] = "Not Found";
-	this->_errorResponses[405] = "Method Not Allowed";
-	this->_errorResponses[413] = "Payload Too Large";
+	this->_defaultError = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<title>Spinnenwebservetjes</title>\r\n<style>\r\nbody{background: url('/spin.png');\r\nbackground-repeat: no-repeat; background-position-y: 100px;}\r\n</style>\r\n</head>\r\n<body>\r\n<h1>HTTP error: ERROR_CODE ERROR_MESSAGE</h1>\r\n<p>&copy; Spinnenwebservetjes</p>\r\n</body>\r\n</html>\r\n";
+	this->_responseStatus[200] = "OK";
+	this->_responseStatus[400] = "Bad Request";
+	this->_responseStatus[403] = "Forbidden";
+	this->_responseStatus[404] = "Not Found";
+	this->_responseStatus[405] = "Method Not Allowed";
+	this->_responseStatus[413] = "Payload Too Large";
+	this->_responseStatus[500] = "Internal Server Error";
 }
 
 /*
@@ -607,11 +583,31 @@ WebServer::TaskIOType	WebServer::_getTaskIOType(Task &task)
  */
 void		WebServer::_debugPrintFDsInSet(fd_set &set, int max = 1024)
 {
+	bool first = true;
 	std::cout << "The set fd's are [";
 	for (int i = 0; i < max; i++)
 	{
 		if (FD_ISSET(i, &set))
-			std::cout << i << " ";
+		{
+			if (!first)
+				std::cout << " ";
+			else
+				first = false;
+			std::cout << i;
+		}
 	}
 	std::cout << "]" << std::endl;
+}
+
+/*
+ * DEBUG
+ *
+ *
+ * print fd type
+ */
+void		WebServer::_debugCheckTaskFD(Task &task, std::string const &mode)
+{
+	std::cout << "Checking fd [" << task.fd << "] of type [";
+	task.printType();
+	std::cout << "] for " << mode << std::endl;
 }

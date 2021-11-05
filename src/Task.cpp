@@ -23,6 +23,7 @@ Task		&Task::operator=(Task const &src)
 	this->fd = src.fd;
 	this->server = src.server;
 	this->client = src.client;
+	this->cgi = src.cgi;
 	return *this;
 }
 
@@ -40,18 +41,23 @@ void		Task::printType()
 			std::cout << "Client response";
 			break;
 		case FILE_READ:
-			std::cout << "file read";
+			std::cout << "File read";
 			break;
 		case FILE_WRITE:
-			std::cout << "file write";
+			std::cout << "File write";
 			break;
 		case FILE_DELETE:
-			std::cout << "file delete";
+			std::cout << "File delete";
+			break;
+		case CGI_READ:
+			std::cout << "CGI read";
+			break;
+		case CGI_WRITE:
+			std::cout << "CGI write";
 			break;
 		default:
-			std::cout << "WTF";
+			std::cout << "Unknown task type";
 	}
-	std::cout << std::endl;
 }
 
 Task::Task(TaskType type, int fd, Server *server, Client *client) :

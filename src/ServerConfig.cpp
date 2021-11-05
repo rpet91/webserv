@@ -1,80 +1,107 @@
+#include "ServerConfig.hpp"
+#include "Config.hpp"
+#include "StringUtils.hpp"
 #include <iostream>
 #include <sstream>
 #include <map>
-#include "ServerConfig.hpp"
-#include "StringUtils.hpp"
+#include <vector>
 
 ServerConfig::~ServerConfig()
 {
+	// std::cout << "Destructor called (ServerConfig)" << std::endl;
 }
 
 ServerConfig::ServerConfig()
 {
-	bzero(&this->_limitClientBodySize, sizeof(this->_limitClientBodySize));
-	bzero(this->_httpMethods, sizeof(this->_httpMethods));
-	bzero(this->_cgi, sizeof(this->_cgi));
+	// std::cout << "Constructor called (ServerConfig)" << std::endl;
 }
 
-ServerConfig::ServerConfig(ServerConfig const& src)
+ServerConfig::ServerConfig(ServerConfig const& src) : Config::Config(src)
 {
+	// std::cout << "Copy Constructor called (ServerConfig)" << std::endl;
 	*this = src;
 }
 
 ServerConfig& ServerConfig::operator=(const ServerConfig& src)
 {
-	this->_defaultServerName = src._defaultServerName;
-	this->_portNumber = src._portNumber;
-	this->_serverNames = src._serverNames;
-	this->_errorPage = src._errorPage;
-	this->_limitClientBodySize = src._limitClientBodySize;
-	this->_root = src._root;
-	this->_index = src._index;
-	this->_autoindex = src._autoindex;
-	memcpy(this->_httpMethods, src._httpMethods, sizeof(this->_httpMethods));
-	memcpy(this->_cgi, src._cgi, sizeof(this->_cgi));
+	//	ServerConfig variables
+	this->_amountLocations = src.getAmountLocations();
+	this->_defaultServerName = src.getDefaultServerName();
+	this->_portNumber = src.getPort();
+	this->_serverNames = src.getServerNames();
 	this->_locations = src._locations;
+
+	//	Config variables
+	this->_limitClientBodySize = src.getLimitClientBodySize();
+	this->_root = src.getRoot();
+	this->_index = src.getIndex();
+	this->_autoindex = src.getAutoindex();
+	this->_errorPage = src.getMapErrorPages();
+	this->_httpMethods[GET] = src.getHttpMethods(GET);
+	this->_httpMethods[POST] = src.getHttpMethods(POST);
+	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);
+	this->_cgi = src.getMapCgi();
+	this->_uploadDir = src.getUploadDir();
+	this->_amountErrorpages = src.getAmountErrorPages();
+	this->_amountCgi = src.getAmountCgi();
 	return (*this);
 }
+
 void	ServerConfig::init(std::string& str)
 {
 	std::vector<std::string>	lines;
+	std::string					identifier;
 
 	StringUtils::trimBraces(str);
 	StringUtils::split(str, ";", lines);
 	for (size_t i = 0; i < lines.size(); i++)
 	{
-		std::string identifier;
 		StringUtils::matchIdentifier(lines[i], identifier);
-		if (!identifier.compare("location"))
-			this->setLocationConfig(lines[i]);
-		else if (!identifier.compare("error_page"))
+		if (!identifier.length())
+			continue;
+		if (identifier == "location")
+			continue;
+		else if (identifier == "error_page")
 			this->setErrorPage(lines[i]);
-		else if (!identifier.compare("listen"))
+		else if (identifier == "listen")
 			this->setPort(lines[i]);
-		else if (!identifier.compare("server_name"))
+		else if (identifier == "server_name")
 			this->setServerName(lines[i]);
-		else if (!identifier.compare("client_max_body_size"))
+		else if (identifier == "client_max_body_size")
 			this->setLimitClientBodySize(lines[i]);
-		else if (!identifier.compare("root"))
+		else if (identifier == "root")
 			this->setRoot(lines[i]);
-		else if (!identifier.compare("index"))
+		else if (identifier == "index")
 			this->setIndex(lines[i]);
-		else if (!identifier.compare("autoindex"))
+		else if (identifier == "autoindex")
 			this->setAutoindex(lines[i]);
-		else if (!identifier.compare("limit_except"))
+		else if (identifier == "limit_except")
 			this->setHttpMethods(lines[i]);
-		else if (!identifier.compare("cgi"))
+		else if (identifier == "cgi")
 			this->setCgi(lines[i]);
+		else if (identifier == "upload")
+			this->setUploadDir(lines[i]);
 		else
 			throw std::runtime_error("configfile: unknown identifier");
 	}
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		StringUtils::matchIdentifier(lines[i], identifier);
+		if (identifier == "location")
+		{
+			this->setLocationConfig(lines[i]);
+		}
+	}
 	this->setDefaultServerName();
+	this->_amountLocations = _locations.size();
+	this->_amountErrorpages = _errorPage.size();
+	this->_amountCgi = _cgi.size();
 }
 
 void	ServerConfig::setDefaultServerName()
 {
-	if (this->getServerNames()[0].empty())
-		throw std::runtime_error("no servername found");
+	if (getServerNames().size() == 0)	//deze moet nooit throwen
+		throw std::runtime_error("configfile: no default servername found");
 	this->_defaultServerName = getServerNames()[0];
 }
 
@@ -83,13 +110,18 @@ void	ServerConfig::setPort(const std::string& str)
 	std::vector<std::string> vec;
 
 	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	for (size_t i = 0; i < vec.size(); i++)
+	for (size_t i = 1; i < vec.size(); i++)
 	{
 		std::stringstream	ss;
 		size_t				num;
+		size_t 				pos = vec[i].find_first_not_of("1234567890", 0);
+
+		if (pos != std::string::npos)
+			throw std::runtime_error("configfile: port must contain digits only");
 		ss << vec[i];
 		ss >> num;
+		if (num > 65535)
+			throw std::runtime_error("configfile: port input greater than 65535");
 		this->_portNumber.push_back(num);
 	}
 }
@@ -99,111 +131,25 @@ void	ServerConfig::setServerName(const std::string& str)
 	std::vector<std::string> vec;
 
 	StringUtils::split(str, " \t\n", vec);
+	if (vec.size() <= 1)
+		vec.push_back("");
 	vec.erase(vec.begin());
 	this->_serverNames = vec;
-}
-
-void	ServerConfig::setErrorPage(const std::string& str)
-{
-	std::vector<std::string>	vec;
-	std::stringstream			ss;
-	size_t						errorNum;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	ss << vec[0];
-	ss >> errorNum;
-	this->_errorPage.insert(std::pair<size_t, std::string>(errorNum, vec[1]));
-}
-
-void	ServerConfig::setLimitClientBodySize(const std::string& str)
-{
-	std::stringstream			ss;
-	size_t						maxBodySize;
-	std::vector<std::string>	vec;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	ss << vec[0];
-	ss >> maxBodySize;
-	this->_limitClientBodySize = maxBodySize;
-}
-
-void	ServerConfig::setRoot(const std::string& str)
-{
-	std::vector<std::string>	vec;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	this->_root = vec[0];
-}
-
-void	ServerConfig::setIndex(const std::string& str)
-{
-	std::vector<std::string>	vec;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	this->_index = vec;
-}
-
-void	ServerConfig::setAutoindex(const std::string& str)
-{
-	std::vector<std::string>	vec;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	if (!vec[0].compare("on"))
-		this->_autoindex = true;
-	else if (!vec[0].compare("off"))
-		this->_autoindex = false;
-	else
-		throw std::runtime_error("configfile: bad autoindex");
-}
-
-void	ServerConfig::setHttpMethods(const std::string& str)
-{
-	std::vector<std::string>	vec;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	for (size_t i = 0; i < vec.size(); i++)
-	{
-		for (size_t j = 0; j < vec[i].size(); j++)
-			vec[i][j] = std::toupper(vec[i][j]);
-		if (!vec[i].compare("GET"))
-			this->_httpMethods[GET] = true;
-		else if (!vec[i].compare("POST"))
-			this->_httpMethods[POST] = true;
-		else if (!vec[i].compare("DELETE"))
-			this->_httpMethods[DELETE] = true;
-		else
-			throw std::runtime_error("configfile: unknown httpmethod");
-	}
-}
-
-void	ServerConfig::setCgi(const std::string& str)
-{
-	std::vector<std::string> vec;
-
-	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	this->_cgi[EXTENSION] = vec[0];
-	this->_cgi[PATH] = vec[1];
 }
 
 void	ServerConfig::setLocationConfig(const std::string& str)
 {
 	std::vector<std::string>	vec;
 	LocationConfig				locationConfig;
-	bool						methods[3] = {this->getHttpMethods(GET), this->getHttpMethods(POST), this->getHttpMethods(DELETE)};
 
 	StringUtils::split(str, " \t\n", vec);
-	vec.erase(vec.begin());
-	locationConfig.init(str, this->getLimitClientBodySize(), this->getAutoindex(), methods);
-	this->_locations.insert(std::pair<std::string, LocationConfig>(vec[0], locationConfig));
+	if (vec.size() != 3)
+		throw std::runtime_error("configfile: location bad formatting");
+	locationConfig.setPath(vec[1]);
+	locationConfig = *this;
+	locationConfig.init(str);
+	this->_locations.insert(std::pair<std::string, LocationConfig>(vec[1], locationConfig));
 }
-
 
 const std::string&	ServerConfig::getDefaultServerName() const
 {
@@ -220,50 +166,6 @@ const std::vector<std::string>&	ServerConfig::getServerNames() const
 	return (this->_serverNames);
 }
 
-const std::string&	ServerConfig::getErrorPage(size_t errorNumber) const
-{
-	std::map<size_t, std::string>::const_iterator	it = this->_errorPage.find(errorNumber);
-	return (it->second);
-}
-
-bool	ServerConfig::hasErrorPage(size_t errorNumber) const
-{
-	std::map<size_t, std::string>::const_iterator	it = this->_errorPage.find(errorNumber);
-	if (it == this->_errorPage.end())
-		return (false);
-	return (true);
-}
-
-size_t	ServerConfig::getLimitClientBodySize() const
-{
-	return (this->_limitClientBodySize);
-}
-
-const std::string&	ServerConfig::getRoot() const
-{
-	return (this->_root);
-}
-
-const std::vector<std::string>&	ServerConfig::getIndex() const
-{
-	return (this->_index);
-}
-
-bool	ServerConfig::getAutoindex() const
-{
-	return (this->_autoindex);
-}
-
-bool	ServerConfig::getHttpMethods(enum e_httpMethods method) const
-{
-	return (this->_httpMethods[method]);
-}
-
-const std::string&	ServerConfig::getCgi(enum e_cgi arg) const
-{
-	return (this->_cgi[arg]);
-}
-
 const LocationConfig&	ServerConfig::getLocationConfig(std::string path) const
 {
 	std::map<std::string, LocationConfig>::const_iterator	it = this->_locations.find(path);
@@ -272,32 +174,36 @@ const LocationConfig&	ServerConfig::getLocationConfig(std::string path) const
 	return (it->second);
 }
 
-std::ostream &operator<<(std::ostream& out, ServerConfig const& sc)
+size_t	ServerConfig::getAmountLocations() const
+{
+	return (this->_amountLocations);
+}
+
+std::ostream &operator<<(std::ostream& out, const ServerConfig& loc)
 {
 	std::cout << "Printing ServerConfig:" << std::endl;
+	out << "AmntLocs: " << loc.getAmountLocations() << std::endl;
+	out << "DfServer: " << loc.getDefaultServerName() << std::endl;
+	out << "Port nrs: "; for (size_t i = 0; i < loc.getPort().size(); i++){out << loc.getPort()[i] << " ";} out << std::endl;
+	out << "ServNmes: "; for (size_t i = 0; i < loc.getServerNames().size(); i++){out << loc.getServerNames()[i] << " ";} out << std::endl;
 
-	out << "Default: " << sc.getDefaultServerName() << std::endl;
 
-	std::cout << "ports:" << std::endl;
-	printVec(sc.getPort());
-
-	std::cout << "servernames:" << std::endl;
-	printVec(sc.getServerNames());
-	
-	out << "LimitClientBodySize: " << sc.getLimitClientBodySize() << std::endl;
-	
-	out << "Root: " << sc.getRoot() << std::endl;
-
-	std::cout << "index:" << std::endl;
-	printVec(sc.getIndex());
-
-	out << "AutoIndex: " << sc.getAutoindex() << std::endl;
-
-	out << "GET: " << sc.getHttpMethods(GET) << std::endl;
-	out << "POST: " << sc.getHttpMethods(POST) << std::endl;
-	out << "DELETE: " << sc.getHttpMethods(DELETE) << std::endl;
-
-	out << "Cgi ext.: " << sc.getCgi(EXTENSION) << std::endl;
-	out << "Cgi path: " << sc.getCgi(PATH) << std::endl;
+	out << "BodySize: " << loc.getLimitClientBodySize() << std::endl;
+	out << "LocaRoot: " << loc.getRoot() << std::endl;
+	out << "indexVec: "; for (size_t i = 0; i < loc.getIndex().size(); i++){out << loc.getIndex()[i] << " ";} out << std::endl;
+	out << "Autoindx: " << loc.getAutoindex() << std::endl;
+	//errorpages
+	out << "httpGET : " << loc.getHttpMethods(GET) << std::endl;
+	out << "httpPOST: " << loc.getHttpMethods(POST) << std::endl;
+	out << "httpDEL : " << loc.getHttpMethods(DELETE) << std::endl;
+	//cgi std::endl;
+	//cgi
+	out << "Upld Dir: " << loc.getUploadDir() << std::endl;
+	out << "AmntErrs: " << loc.getAmountErrorPages() << std::endl;
+	out << "boolcgi : " << loc.hasCgi() << std::endl;
+	out << "AmntCGIs: " << loc.getAmountCgi() << std::endl;
+	out << "Cgi pyth: " << loc.getCgi(".py") << std::endl;
+	out << "Cgi .php: " << loc.getCgi(".php") << std::endl;
+	out << "Cgi rand: " << loc.getCgi(".sfsdfdsf") << std::endl;
 	return (out);
 }
