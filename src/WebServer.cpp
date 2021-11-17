@@ -58,6 +58,7 @@ void		WebServer::run()
 		write_tmp = this->_writeable;
 		this->_debugPrintFDsInSet(read_tmp, 32);
 		this->_debugPrintFDsInSet(write_tmp, 32);
+		std::cout << "Er zijn nu " << this->_clientMap.size() << " clients." << std::endl;
 		std::cout << "we gaan nu select in" << std::endl;
 		std::cout << "Maps are length: " << this->_readTaskMap.size() << " and ";
 		std::cout << this->_writeTaskMap.size() << std::endl;
@@ -71,6 +72,8 @@ void		WebServer::run()
 		for (it = this->_readTaskMap.begin(); it != this->_readTaskMap.end(); it++)
 		{
 			currentTask = it->second;
+			if (this->_isFDInRemovalSet(currentTask.fd, this->_readFDToRemove) == true)
+				continue ;
 			this->_debugCheckTaskFD(currentTask, "reading"); // debug
 			if (FD_ISSET(it->first, &read_tmp))
 			{
@@ -92,6 +95,11 @@ void		WebServer::run()
 
 					std::cout << "Lekkchr gelezen" << std::endl;
 				}
+				else if (currentTask.type == Task::CGI_READ)
+				{
+					std::cout << "CGI READ na select" << std::endl;
+					this->_readCGI(currentTask);
+				}
 				else
 				{
 					std::cout << "Something went wrong: unknown read task type" << std::endl;
@@ -104,6 +112,8 @@ void		WebServer::run()
 		for (it = this->_writeTaskMap.begin(); it != this->_writeTaskMap.end(); it++)
 		{
 			currentTask = it->second;
+			if (this->_isFDInRemovalSet(currentTask.fd, this->_writeFDToRemove) == true)
+				continue ;
 			this->_debugCheckTaskFD(currentTask, "writing"); // debug
 			if (FD_ISSET(it->first, &write_tmp))
 			{
@@ -113,15 +123,20 @@ void		WebServer::run()
 				if (currentTask.type == Task::CLIENT_RESPONSE)
 				{
 					this->_sendResponse(currentTask);
-					this->_markFDForRemoval(it->first, this->_writeable, WRITE);
+			//		this->_markFDForRemoval(it->first, this->_writeable, WRITE);
 					FD_CLR(it->first, &this->_writeable);
 				}
 				else if (currentTask.type == Task::FILE_WRITE)
 				{
 					std::cout << "Lekkchr raiteh" << std::endl;
 					this->_writeFile(currentTask);
-					this->_markFDForRemoval(it->first, this->_readable, READ);
+			//		this->_markFDForRemoval(it->first, this->_writeable, WRITE);
 					std::cout << "Lekkchr gerait" << std::endl;
+				}
+				else if(currentTask.type == Task::CGI_WRITE)
+				{
+					std::cout << "CGI WRITE na select" << std::endl;
+					this->_writeCGI(currentTask);
 				}
 				else
 				{
@@ -259,7 +274,7 @@ void		WebServer::_acceptConnection(int socketFD)
 }
 
 /*
- * This function reads the incoming HTTPRequest.
+ * This function reads the incoming HTTP request.
  */
 void		WebServer::_readRequest(Client &client)
 {
@@ -272,22 +287,47 @@ void		WebServer::_readRequest(Client &client)
 	bzero(buffer, RECVBUFFERSIZE + 1);
 	bytesRead = recv(client.fd, buffer, RECVBUFFERSIZE, 0);
 	std::cout << "BYTES READ: AAAAAAAAAAAAAH: " << bytesRead << std::endl;
-	if (bytesRead < 0)
-	{
-		perror("bytes read < 0: ");
-		throw std::runtime_error("recv error");
-	}
-	else if (bytesRead == 0)
+	if (bytesRead <= 0)
 	{
 		// Connection was closed on the client's side.
 		std::cout << "Closing client fd: [" << client.fd << "]" << std::endl;
 		close(client.fd);
-		this->_markFDForRemoval(client.fd, this->_readable, READ);
+		this->_removeTasksForClient(client.fd);
+		this->_clientMap.erase(client.fd);
 		return ;
 	}
+	client.getRequest().modifyBodyLength(bytesRead);
 	client.setIncomingMessage(buffer);
-	if (client.getIncomingMessage().find("\r\n\r\n") == std::string::npos)
+
+	std::string		incomingMessage = client.getIncomingMessage();
+	// If we didn't find the double line break, we return to read more in the future.
+	if (incomingMessage.find("\r\n\r\n") == std::string::npos)
 		return ;
+	else
+	{
+		// Find the content length. If we haven't read enough characters, return.
+		size_t		contentLengthPos = incomingMessage.find("Content-Length");
+
+		if (contentLengthPos != std::string::npos)
+		{
+			size_t				contentLength;
+			size_t				startPos;
+			size_t				endPos;
+			std::stringstream	conversionStream;
+			std::string			lengthString;
+
+			// Find the start and end position of our content length.
+			startPos = std::string("Content-Length: ").length() + contentLengthPos;
+			endPos = incomingMessage.find("\r\n", startPos);
+
+			// Make a string of the content length and convert it to a size_t.
+			lengthString = incomingMessage.substr(startPos, endPos - startPos);
+			conversionStream << lengthString;
+			conversionStream >> contentLength;
+			if (client.getRequest().getBodyLength() - 4 < contentLength)
+				return ;
+		}
+	}
 	std::cout << std::endl;
 	std::cout << "[[[[[[[[[" << std::endl;
 	std::cout << client.getIncomingMessage();
@@ -323,6 +363,8 @@ void		WebServer::_processRequest(Client &client, std::string requestMessage)
 			client.getRequest().setHeader(header);
 	}
 
+	// The header length is not part of the body length so we need to substract it.
+	client.getRequest().modifyBodyLength(-lineStart);
 	// Put the remaining message into the body.
 	body = this->_getString(&lineStart, requestMessage, "\r\n\r\n");
 	client.getRequest().setBody(body);
@@ -359,8 +401,7 @@ void		WebServer::_findServerForRequest(Client &client)
 	std::cout << "{" << host << "}" << std::endl;
 	colonPosition = host.find(":");
 	hostName = host.substr(0, colonPosition);
-	port = std::stoi(host.substr(colonPosition + 1));
-//	std::istringstream(host.substr(colonPosition + 1)) >> port;
+	std::istringstream(host.substr(colonPosition + 1)) >> port;
 	std::cout << hostName << "," << port << std::endl;
 
 	// Get the servers for this port.
@@ -444,13 +485,86 @@ void		WebServer::_readFile(Task &task)
 }
 
 /*
- *
+ * This function is used to upload a file.
  */
 void		WebServer::_writeFile(Task &task)
 {
 	std::cout << "het is tijd om te schrijven" << std::endl;
 	(void) task;
 	exit(0);
+	this->_markFDForRemoval(task.fd, this->_writeable, WRITE);
+}
+
+/*
+ *
+ */
+void		WebServer::_readCGI(Task &task)
+{
+	std::cout << "super adrem cgi" << std::endl;
+	char		buffer[READBUFFERSIZE + 1];
+	int			bytesRead;
+	Task		responseTask;
+
+	bzero(buffer, READBUFFERSIZE + 1);
+	bytesRead = read(task.fd, buffer, READBUFFERSIZE);
+	if (bytesRead < 0)
+	{
+		perror("stukker");
+		throw std::runtime_error("read error");
+	}
+	else if (bytesRead > 0)
+	{
+		task.cgi->setResponseBody(buffer);
+		return ;
+	}
+
+	size_t		lineStart = 0;
+	size_t		prevStart;
+	std::string	responseMessage = task.cgi->getResponseBody();
+	std::string	header, body;
+
+	// Process the headers.
+	while (true)
+	{
+		prevStart = lineStart;
+		header = this->_getString(&lineStart, responseMessage, "\r\n");
+		if (prevStart == lineStart || header == "")
+			break;
+		else
+			task.client->getResponse().setHeader(header);
+	}
+
+	// Put the remaining message into the body.
+	body = this->_getString(&lineStart, responseMessage, "\r\n\r\n");
+	task.client->getResponse().setBody(body);
+	close(task.fd);
+	responseTask.type = Task::CLIENT_RESPONSE;
+	responseTask.client = task.client;
+	responseTask.fd = task.client->fd;
+	this->_addTask(responseTask);
+	this->_markFDForRemoval(task.fd, this->_readable, READ);
+	std::cout << "einde read cgi" << std::endl;
+}
+
+/*
+ *
+ */
+void		WebServer::_writeCGI(Task &task)
+{
+	std::cout << "super riterem cgi" << std::endl;
+	int				ret;
+	std::string		body = task.client->getRequest().getBody();
+	Task			newTask;
+
+	std::cout << ":::" << std::endl << body << std::endl << ":::" << std::endl;
+	ret = write(task.fd, body.c_str(), body.size());
+	std::cout << "Wrote " << ret << " characters to fd: " << task.fd << std::endl;
+	close(task.fd);
+	newTask = task;
+	newTask.fd = task.cgi->fdout[0];
+	newTask.type = Task::CGI_READ;
+	this->_addTask(newTask);
+	this->_markFDForRemoval(task.fd, this->_writeable, WRITE);
 }
 
 /*
@@ -460,6 +574,7 @@ void		WebServer::_sendResponse(Task &task)
 {
 	std::cout << "sending respones :) " << std::endl;
 	int					statusCode;
+	int					ret;
 	std::string			responseString;
 	std::string			body;
 	std::stringstream	contentLength;
@@ -480,10 +595,10 @@ void		WebServer::_sendResponse(Task &task)
 	response.setHeader(contentLength.str());
 	responseString = response.getResponseText(this->_responseStatus[response.getStatusCode()]);
 	//std::cout << "SENDING:" << std::endl << std::endl << responseString << std::endl << std::endl;
-	int		ret = send(client->fd, responseString.c_str(), responseString.size() + 1, 0);
-	response.reset();
-	(void)ret;
+	ret = send(client->fd, responseString.c_str(), responseString.size(), 0);
+	task.client->reset();
 	// error check?
+	this->_markFDForRemoval(task.fd, this->_writeable, WRITE);
 }
 
 /*
@@ -495,11 +610,19 @@ void		WebServer::_addTask(Task &task)
 	std::cout << "Ik ben in mn nieuwe functie" << std::endl;
 	if (this->_getTaskIOType(task) == READ)
 	{
+		if (this->_isFDInRemovalSet(task.fd, this->_readFDToRemove) == true)
+		{
+			if (task.type == Task::FILE_READ)
+				close(task.fd);
+			return ;
+		}
 		this->_readTaskMap[task.fd] = task;
 		FD_SET(task.fd, &this->_readable);
 	}
 	else
 	{
+		if (this->_isFDInRemovalSet(task.fd, this->_writeFDToRemove) == true)
+			return ;
 		this->_writeTaskMap[task.fd] = task;
 		FD_SET(task.fd, &this->_writeable);
 	}
@@ -556,6 +679,9 @@ void		WebServer::_responsesSetup()
 {
 	this->_defaultError = "<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<title>Spinnenwebservetjes</title>\r\n<style>\r\nbody{background: url('/spin.png');\r\nbackground-repeat: no-repeat; background-position-y: 100px;}\r\n</style>\r\n</head>\r\n<body>\r\n<h1>HTTP error: ERROR_CODE ERROR_MESSAGE</h1>\r\n<p>&copy; Spinnenwebservetjes</p>\r\n</body>\r\n</html>\r\n";
 	this->_responseStatus[200] = "OK";
+	this->_responseStatus[201] = "Created";
+	this->_responseStatus[204] = "No Content";
+	this->_responseStatus[301] = "Moved Permanently";
 	this->_responseStatus[400] = "Bad Request";
 	this->_responseStatus[403] = "Forbidden";
 	this->_responseStatus[404] = "Not Found";
@@ -571,9 +697,53 @@ WebServer::TaskIOType	WebServer::_getTaskIOType(Task &task)
 {
 	if (task.type == Task::WAIT_FOR_CONNECTION ||
 			task.type == Task::CLIENT_READ ||
-			task.type == Task::FILE_READ)
+			task.type == Task::FILE_READ ||
+			task.type == Task::CGI_READ)
 		return READ;
 	return WRITE;
+}
+
+/*
+ * This function will remove all current tasks that have the clientFD as their
+ * client's fd.
+ */
+void		WebServer::_removeTasksForClient(int clientFD)
+{
+	std::map<int, Task>::iterator		it;
+
+	for (it = this->_readTaskMap.begin(); it != this->_readTaskMap.end(); it++)
+	{
+		if (it->second.client->fd == clientFD)
+		{
+			if (it->second.type == Task::FILE_READ)
+				close(it->first);
+			this->_markFDForRemoval(it->second.fd, this->_readable, READ);
+		}
+	}
+	for (it = this->_writeTaskMap.begin(); it != this->_writeTaskMap.end(); it++)
+	{
+		if (it->second.client->fd == clientFD)
+		{
+			// close fd?
+			this->_markFDForRemoval(it->second.fd, this->_writeable, WRITE);
+		}
+	}
+}
+
+/*
+ * This function will check if an FD is present in a set for deletion
+ */
+bool		WebServer::_isFDInRemovalSet(int fd, std::vector<int> &removalVector)
+{
+	std::vector<int>::iterator	it;
+
+
+	for (it = removalVector.begin(); it != removalVector.end(); it++)
+	{
+		if (*it == fd)
+			return true;
+	}
+	return false;
 }
 
 /*

@@ -33,5 +33,3 @@ class	LocationConfig : public Config
 std::ostream &operator<<(std::ostream& out, LocationConfig const& loc);
 
 #endif
-
-

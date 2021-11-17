@@ -7,16 +7,16 @@
 <body>
 	<h3>&copy; Spinnenwebservetjes' official form</h3>
 	
-	<form method="post" action="submission.php">
+	<form method="get" action="submission.php">
 
-		<label for="Name">Your name</label>
+		<label for="name">Your name</label>
 		<div>
-			<input type="text" id="Name" name="Name" required>
+			<input type="text" id="name" name="name" required>
 		</div>
 		
-		<label for="Game">Your favourite game</label>
+		<label for="game">Your favourite game</label>
 		<div>
-			<input type="game" id="Game" name="Game" required>
+			<input type="text" id="game" name="game" required>
 		</div>
 		
 		<label></label>
@@ -25,6 +25,18 @@
 		</div>
 
     </form>
+	<br>
+	<form enctype="multipart/form-data" method="post" action="file.php">
+
+		<label for="file">Upload an image</label>
+		<div>
+			<input type="file" id="image" name="image" accept="image/png, image/jpeg">
+		</div>
+		<div>
+			<input type="submit" value="Upload file" />
+		</div>
+
+	</form>
 
 </body>
 </html>

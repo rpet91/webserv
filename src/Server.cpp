@@ -8,7 +8,7 @@
 #include "CGI.hpp"				// CGI
 #include <string>				// std::string
 #include <fcntl.h>				// open
-#include <unistd.h>				// fork, dup2, execve
+#include <unistd.h>				// fork, dup2, execve, getcwd
 #include <cstdlib>				// exit
 #include <stdexcept>			// std::runtime_error
 #include <sys/stat.h>			// stat
@@ -62,24 +62,36 @@ const ServerConfig		&Server::getConfig() const
 void		Server::handleConnection(Task &task)
 {
 	std::string				URI = task.client->getRequest().getURI();
-	LocationConfig const	location = this->_config.getLocationConfig(URI);
+	LocationConfig			location = this->_config.getLocationConfig(URI);
 	std::string				root = location.getRoot();
 	std::string				pathName = root + URI;
+	std::string				method = task.client->getRequest().getMethod();
+//	std::string				redirect = this->_config.getRedirection(); // A function which will return a string to the redirection path. It returns an empty string if no redirection was found. 
+	std::string				redirect = "";
+
+	//hardcoded redirect so it will redirect "/redirect/" to "/". In the configfile it should be something like "return 301 /;"
+	if (URI == "/redirect/")
+		redirect = "/";
 
 	task.server = this;
-	if (task.client->getResponse().isError())
+	if (this->_checkForInitialErrors(task))
 	{
 		this->_checkErrorPath(task);
 		return ;
 	}
-	if (task.client->getRequest().getProtocol() != "HTTP/1.1" || URI.find("/../") != std::string::npos)
+
+	// Checks if the server has a redirection.
+	if (redirect != "")
 	{
-		std::cout << "alles naar de tering en geef 400 error" << std::endl;
-		task.client->getResponse().setStatusCode(400);
-		this->_checkErrorPath(task);
-		return ;
+		task.client->getRequest().setURI(redirect);
+		URI = redirect;
+		pathName = root + URI;
+		task.client->getResponse().setStatusCode(301);
+		location = this->_config.getLocationConfig(URI);
 	}
-	else if (*pathName.rbegin() == '/')
+
+	// Checks of the requested URI end with a /
+	if (*pathName.rbegin() == '/')
 	{
 		std::string		currentIndexPage;
 		bool			validIndexPage = false;
@@ -111,25 +123,36 @@ void		Server::handleConnection(Task &task)
 		}
 	}
 	std::cout << "uiteindelijke pathname: " << pathName << std::endl;
-	if (task.client->getRequest().getMethod() == "DELETE")
+	if (method == "DELETE")
 	{
-		task.type = Task::FILE_DELETE;
+		this->_deleteFile(task, pathName);
 		return ;
 	}
 
-	bool	get = (task.client->getRequest().getMethod() == "GET");
-/*	if (this->_config.newHasCgi(URI) == true)
+	bool	get = (method == "GET");
+	if (this->_config.hasCGI(URI) == true)
 	{
 		std::cout << "We have a CGI for: " << URI << std::endl;
-		std::string		CGIPath = this->_config.newGetCgi(URI);
+		std::string		CGIPath = this->_config.getCGI(URI);
 		this->_launchCGI(task, CGIPath);
-		task.type = (get == true) ? Task::CGI_READ : Task::CGI_WRITE;
-		task.fd = (get == true) ? task.cgi->fdout[1] : task.cgi->fdin[0];
-		std::cout << "fd na cgi dingen: " << task.fd << std::endl;
 		if (task.client->getResponse().isError())
 			this->_checkErrorPath(task);
+		else
+		{
+			if (get == true)
+			{
+				task.type = Task::CGI_READ;
+				task.fd = task.cgi->fdout[0];
+			}
+			else
+			{
+				task.type = Task::CGI_WRITE;
+				task.fd = task.cgi->fdin[1];
+			}
+		}
+		std::cout << "fd na cgi dingen: " << task.fd << std::endl;
 	}
-	else*/
+	else
 	{
 		std::cout << "We DO NOT have a CGI for: " << URI << std::endl;
 		task.type = (get == true) ? Task::FILE_READ : Task::FILE_WRITE;
@@ -149,19 +172,20 @@ int			Server::_openFile(Task &task, std::string &pathName)
 	int				fd = 0;
 
 	std::cout << "PATHNAME: " << pathName << std::endl;
-	if (this->_pathType(pathName) != DOCUMENT)
+	if (clientRequest != "POST" && this->_pathType(pathName) != DOCUMENT)
 	{
 		std::cout << "404 error incoming baybeee" << std::endl;
 		response.setStatusCode(404);
 		return -1;
 	}
-	if (clientRequest == "GET")
+	else if (clientRequest == "GET")
 	{
 		if ((fd = open(pathName.c_str(), O_RDONLY)) < 0)
 			response.setStatusCode(403);
 	}
 	else if (clientRequest == "POST")
 	{
+		response.setStatusCode(201);
 		if (this->_isValidContentLength(task) < 0)
 			return -1;
 		if ((fd = open(pathName.c_str(), O_CREAT | O_WRONLY | O_TRUNC)) < 0)
@@ -169,6 +193,7 @@ int			Server::_openFile(Task &task, std::string &pathName)
 	}
 	else if (clientRequest == "OTHER")
 	{
+		std::cout << "error 405 is nu echt nodig" << std::endl;
 		response.setStatusCode(405);
 		return -1;
 	}
@@ -229,21 +254,20 @@ Server::PathType	Server::_pathType(std::string const &path)
  */
 int			Server::_isValidContentLength(Task &task)
 {
-	size_t					bodyContentLength;
 	size_t					givenContentLength;
 	std::stringstream		conversionStream;
 	Request					&request = task.client->getRequest();
 	
-	bodyContentLength = request.getBody().length();
 	conversionStream << request.getHeader("Content-Length");
 	conversionStream >> givenContentLength;
-	if (bodyContentLength != givenContentLength)
+	if (task.client->getRequest().getBodyLength() != givenContentLength)
 	{
 		task.client->getResponse().setStatusCode(400);
 		return -1;
 	}
 	else if (task.server->getConfig().getLimitClientBodySize() < givenContentLength)
 	{
+		std::cout << "wtf?" << std::endl;
 		task.client->getResponse().setStatusCode(413);
 		return -1;
 	}
@@ -299,7 +323,19 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 	CGI			*cgi;
 	pid_t		pid;
 	bool		post = (task.client->getRequest().getMethod() == "POST") ? true : false;
-	
+
+	// Checks if the content length doesn't override the accepted limit
+	if (post && this->_isValidContentLength(task) < 0)
+	{
+		std::cout << "CGI content length is invalid " << std::endl;
+		return ;
+	}
+	// Checks if the path to CGI executable is valid.
+	if (this->_pathType(CGIPath) != DOCUMENT)
+	{
+		task.client->getResponse().setStatusCode(404);
+		return ;
+	}
 	cgi = new CGI();
 	// Create the pipe that the CGI will use to write its output back to us.
 	if (pipe(cgi->fdout) < 0)
@@ -314,6 +350,7 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 		this->_closePipesAndError(task, cgi);
 		return ;
 	}
+
 	pid = fork();
 	if (pid < 0)
 	{
@@ -342,7 +379,9 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 			close(cgi->fdin[0]);
 		}
 		char	*execArgs[2] = {const_cast<char*>(CGIPath.c_str()), NULL};
+		std::cerr << "boeiend" << std::endl;
 		execv(CGIPath.c_str(), execArgs);
+		std::cerr << "Couldn't find the CGI executable." << std::endl;
 		exit(EXIT_FAILURE);
 	}
 	close(cgi->fdout[1]);
@@ -356,17 +395,15 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
  */
 void	Server::_setEnvironmentVars(Task &task)
 {
-	std::cout << "Moederkoekhappen of placentaart?" << std::endl;
+	std::cout << "CGI vars zetten in child process" << std::endl;
 	Request					request = task.client->getRequest();
 	std::string				URI = task.client->getRequest().getURI();
 	LocationConfig const	location = this->_config.getLocationConfig(URI);
 	std::string				root = location.getRoot();
-	
-//	if (request.getMethod() == "POST")
-//	{
-		this->_trySetVar("CONTENT_TYPE", request.getHeader("Content-Type"));
-		this->_trySetVar("CONTENT_LENGTH", request.getHeader("Content-Length"));
-//	}
+	std::string				cwd = std::string(getcwd(0, 0)) + '/';
+
+	this->_trySetVar("CONTENT_TYPE", request.getHeader("Content-Type"));
+	this->_trySetVar("CONTENT_LENGTH", request.getHeader("Content-Length"));
 	this->_trySetVar("GATEWAY_INTERFACE", "CGI/1.1");
 	this->_trySetVar("HTTP_ACCEPT", request.getHeader("Accept"));
 	this->_trySetVar("HTTP_ACCEPT_CHARSET", request.getHeader("Accept-Charset"));
@@ -379,8 +416,8 @@ void	Server::_setEnvironmentVars(Task &task)
 	this->_trySetVar("QUERY_STRING", request.getQueryString());
 	this->_trySetVar("REDIRECT_STATUS", "true");
 	this->_trySetVar("REMOTE_ADDR", task.client->getAddress());
-	this->_trySetVar("REQUEST_MEHTOD", request.getMethod());
-	this->_trySetVar("SCRIPT_FILENAME", root + URI);
+	this->_trySetVar("REQUEST_METHOD", request.getMethod());
+	this->_trySetVar("SCRIPT_FILENAME", cwd + root + URI);
 	this->_trySetVar("SCRIPT_NAME", URI);
 	this->_trySetVar("SERVER_NAME", request.getMatchedServerName());
 	this->_trySetVar("SERVER_PORT", request.getPort());
@@ -409,4 +446,54 @@ void	Server::_closePipesAndError(Task &task, CGI *cgi)
 	close(cgi->fdout[0]);
 	close(cgi->fdout[1]);
 	task.client->getResponse().setStatusCode(500);
+}
+
+/*
+ * This function will check for initial errors before we start handling the connection.
+ */
+int		Server::_checkForInitialErrors(Task &task)
+{
+	Response		&clientResponse = task.client->getResponse();
+	std::string		method = task.client->getRequest().getMethod();
+	std::string		protocol = task.client->getRequest().getProtocol();
+	std::string		URI = task.client->getRequest().getURI();
+
+	// Checks if we already had an error before we entered handle connection.
+	if (clientResponse.isError())
+		return 1;
+	// Checks if the request of the client is accepted by the config file.
+	else if (task.server->getConfig().isValidHttpMethod(method) == false)
+	{
+		std::cout << "invalid method" << std::endl;
+		clientResponse.setStatusCode(405);
+		return 1; 
+	}
+	// Checks if the request of the client has a valid URI.
+	else if (protocol != "HTTP/1.1" || URI.find("/../") != std::string::npos)
+	{
+		std::cout << "alles naar de tering en geef 400 error" << std::endl;
+		clientResponse.setStatusCode(400);
+		return 1;
+	}
+	return 0;
+}
+
+/*
+ * This function executes the delete request.
+ */
+void	Server::_deleteFile(Task &task, std::string const &path)
+{
+	int ret = remove(path.c_str());
+	std::cout << "tijd om iets te duhlietun. ret: " << ret << std::endl;
+	if (ret < 0)
+	{
+		if (ret == EACCES)
+			task.client->getResponse().setStatusCode(403);
+		else
+			task.client->getResponse().setStatusCode(404);
+	}
+	else
+		task.client->getResponse().setStatusCode(204);
+	task.fd = task.client->fd;
+	task.type = Task::CLIENT_RESPONSE;
 }

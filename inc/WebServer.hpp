@@ -39,12 +39,16 @@ class WebServer
 							std::string const &source, std::string const &delimiter);
 		void			_readFile(Task &task);
 		void			_writeFile(Task &task);
+		void			_readCGI(Task &task);
+		void			_writeCGI(Task &task);
 		void			_sendResponse(Task &task);
 		void			_addTask(Task &task);
 		void			_markFDForRemoval(int fd, fd_set &set, TaskIOType mode);
 		void			_replaceDefaultErrorMessage(std::string &body, int errorCode);
 		void			_responsesSetup();
 		TaskIOType		_getTaskIOType(Task &task);
+		void			_removeTasksForClient(int clientFD);
+		bool			_isFDInRemovalSet(int fd, std::vector<int> &removalVector);
 // DEBUG
 		void			_debugPrintFDsInSet(fd_set &set, int max);
 		void			_debugCheckTaskFD(Task &task, std::string const &mode);

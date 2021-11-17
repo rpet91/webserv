@@ -26,18 +26,17 @@ class Config
 		const std::string&							getRoot() const;
 		const std::vector<std::string>&				getIndex() const;
 		bool    									getAutoindex() const;
-		bool    									getHttpMethods(enum e_httpMethods method) const;
+		bool    									isValidHttpMethod(const std::string&) const;
 		const std::string&							getErrorPage(size_t) const;
 		bool										hasErrorPage(size_t) const;
-		bool										hasCgi() const;
-		const std::string							getCgi(const std::string&) const;
-		bool										newHasCgi(const std::string& string) const;
-		const std::string							newGetCgi(const std::string& string);
+		bool										hasCGI(const std::string&) const;
+		const std::string							getCGI(const std::string&) const;
 		const std::string&							getUploadDir() const;
 		size_t										getAmountErrorPages() const;
-		size_t										getAmountCgi() const;
+		size_t										getAmountCGI() const;
 		const std::map<size_t, std::string>&		getMapErrorPages() const;
-		const std::map<std::string, std::string>&	getMapCgi() const;
+		const std::map<std::string, std::string>&	getMapCGI() const;
+		bool										getHttpMethods(enum	e_httpMethods method) const;
 
 		//set()
 		void	setLimitClientBodySize(const std::string&);
@@ -45,7 +44,7 @@ class Config
 		void	setIndex(const std::string&);
 		void	setAutoindex(const std::string&);
 		void	setHttpMethods(const std::string&);
-		void	setCgi(const std::string&);
+		void	setCGI(const std::string&);
 		void	setUploadDir(const std::string&);
 		void	setErrorPage(const std::string&);
 
@@ -56,10 +55,13 @@ class Config
 		bool								_autoindex;
 		std::map<size_t, std::string>		_errorPage;
 		bool								_httpMethods[3];
-		std::map<std::string, std::string>	_cgi;
+		std::map<std::string, std::string>	_CGI;
 		std::string							_uploadDir;
 		size_t								_amountErrorpages;
-		size_t								_amountCgi;
+		size_t								_amountCGI;
+
+	private:
+		const std::string*	lookUpCGI(const std::string& string) const;
 };
 
 #endif

@@ -46,9 +46,6 @@ void		Task::printType()
 		case FILE_WRITE:
 			std::cout << "File write";
 			break;
-		case FILE_DELETE:
-			std::cout << "File delete";
-			break;
 		case CGI_READ:
 			std::cout << "CGI read";
 			break;

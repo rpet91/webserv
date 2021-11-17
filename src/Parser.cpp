@@ -54,7 +54,7 @@ void	Parser::readConfigfile()
 {
 	std::ifstream	ifs;
 
-	ifs.open(this->_filename);
+	ifs.open(this->_filename.c_str());
 	if (!ifs)
 		throw std::runtime_error("input filestream open error");
 	getline(ifs, this->_filecontent, '\0');

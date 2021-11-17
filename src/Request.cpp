@@ -8,7 +8,7 @@
 /*
  * Default constructor.
  */
-Request::Request()
+Request::Request() : _bodyLength(0)
 {
 }
 
@@ -38,7 +38,24 @@ Request					&Request::operator=(Request const &src)
 	this->_protocol = src._protocol;
 	this->_headers = src._headers;
 	this->_body = src._body;
+	this->_matchedServerName = src._matchedServerName;
+	this->_bodyLength = src._bodyLength;
 	return *this;
+}
+
+/*
+ * This function will reset a request to its basic settings.
+ */
+void				Request::reset()
+{
+	this->_method.clear();
+	this->_URI.clear();
+	this->_queryString.clear();
+	this->_protocol.clear();
+	this->_headers.clear();
+	this->_body.clear();
+	this->_matchedServerName.clear();
+	this->_bodyLength = 0;
 }
 
 /*
@@ -122,6 +139,14 @@ std::string				Request::getPort()
 }
 
 /*
+ * This function returns the length of the requested body.
+ */
+size_t					Request::getBodyLength() const
+{
+	return this->_bodyLength;
+}
+
+/*
  * This function sets the method of the request.
  */
 void					Request::setMethod(std::string const &method)
@@ -197,4 +222,12 @@ void					Request::setBody(std::string const &body)
 void					Request::setMatchedServerName(std::string const &matchedServerName)
 {
 	this->_matchedServerName = matchedServerName;
+}
+
+/*
+ * This function keeps track of the length of the requested body of the client.
+ */
+void					Request::modifyBodyLength(int length)
+{
+	this->_bodyLength += length;
 }

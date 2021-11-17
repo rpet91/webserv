@@ -19,6 +19,7 @@ class Client
 		Client(int socketFD, struct sockaddr *addressInfo);
 
 		// Public functions
+		void				reset();
 		Request				&getRequest();
 		Response			&getResponse();
 		std::string			&getAddress();

@@ -45,6 +45,8 @@ class Server
 		void		_setEnvironmentVars(Task &task);
 		void		_trySetVar(const char *name, std::string const &value);
 		void		_closePipesAndError(Task &task, CGI *cgi);
+		int			_checkForInitialErrors(Task &task);
+		void		_deleteFile(Task &task, std::string const &path);
 
 		// Private variables
 		ServerConfig	_config;

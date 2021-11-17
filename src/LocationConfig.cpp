@@ -40,10 +40,10 @@ LocationConfig&	LocationConfig::operator=(const ServerConfig& src)
 	this->_httpMethods[GET] = src.getHttpMethods(GET);
 	this->_httpMethods[POST] = src.getHttpMethods(POST);
 	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);
-	this->_cgi = src.getMapCgi();
+	this->_CGI = src.getMapCGI();
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
-	this->_amountCgi = src.getAmountCgi();
+	this->_amountCGI = src.getAmountCGI();
 	return (*this);
 }
 
@@ -61,10 +61,10 @@ LocationConfig&	LocationConfig::operator=(const LocationConfig& src)
 	this->_httpMethods[GET] = src.getHttpMethods(GET);
 	this->_httpMethods[POST] = src.getHttpMethods(POST);
 	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);
-	this->_cgi = src.getMapCgi();
+	this->_CGI = src.getMapCGI();
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
-	this->_amountCgi = src.getAmountCgi();
+	this->_amountCGI = src.getAmountCGI();
 	return (*this);
 }
 
@@ -83,6 +83,7 @@ void	LocationConfig::init(const std::string& data)
 	{
 		std::string identifier;
 		StringUtils::matchIdentifier(lines[i], identifier);
+		StringUtils::lowerCase(identifier);
 		if (identifier == "root")
 			this->setRoot(lines[i]);
 		else if (identifier == "client_max_body_size")
@@ -94,7 +95,7 @@ void	LocationConfig::init(const std::string& data)
 		else if (identifier == "limit_except")
 			this->setHttpMethods(lines[i]);
 		else if (identifier == "cgi")
-			this->setCgi(lines[i]);
+			this->setCGI(lines[i]);
 		else if (identifier == "upload")
 			this->setUploadDir(lines[i]);
 		else
@@ -124,7 +125,8 @@ std::ostream &operator<<(std::ostream& out, const LocationConfig& loc)
 	out << "httpPOST: " << loc.getHttpMethods(POST) << std::endl;
 	out << "httpDEL : " << loc.getHttpMethods(DELETE) << std::endl;
 	out << "Upld Dir: " << loc.getUploadDir() << std::endl;
-	out << "boolcgi : " << loc.hasCgi() << std::endl;
-	out << "Cgi     : " << loc.getCgi(".php") << " | " << loc.getCgi(".py") << std::endl;
+	out << "CGI     : " << loc.getCGI(".php") << " | " << loc.getCGI(".py") << std::endl;
 	return (out);
 }
+
+

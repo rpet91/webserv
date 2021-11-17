@@ -4,6 +4,8 @@
 # include <string>
 # include <vector>
 
+# define Whitespaces " \v\t\n"
+
 class StringUtils
 {
 	public:
@@ -14,6 +16,7 @@ class StringUtils
 		static void			splitNoBraces(const std::string&, const char*, std::vector<std::string>&);
 		static void			splitServers(const std::string&, std::vector<std::string>&);
 		static void			matchIdentifier(const std::string&, std::string&);
+		static void			lowerCase(std::string& string);
 };
 
 #endif

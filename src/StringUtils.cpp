@@ -154,3 +154,9 @@ void	StringUtils::matchIdentifier(const std::string& str, std::string& identifie
 	else
 		identifier = "";
 }
+
+void	StringUtils::lowerCase(std::string& string)
+{
+	for (size_t i = 0; i < string.length(); i++)
+		string[i] = std::tolower(string[i]);
+}

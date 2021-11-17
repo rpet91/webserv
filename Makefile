@@ -48,3 +48,9 @@ test: all
 
 post: all
 	./$(NAME) config/posttest_config.conf
+
+delete: all
+	./$(NAME) config/deletetest_config.conf
+
+redirect: all
+	./$(NAME) config/redirecttest_config.conf

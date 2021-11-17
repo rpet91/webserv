@@ -18,7 +18,6 @@ class Task
 			CLIENT_RESPONSE,
 			FILE_READ,
 			FILE_WRITE,
-			FILE_DELETE,
 			CGI_READ,
 			CGI_WRITE
 		};

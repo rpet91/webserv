@@ -40,8 +40,8 @@ Response::~Response()
  */
 void			Response::reset()
 {
-	this->_body = "";
-	this->_headers = "";
+	this->_body.clear();
+	this->_headers.clear();
 	this->_statusCode = 200;
 	this->_defaultError = false;
 }

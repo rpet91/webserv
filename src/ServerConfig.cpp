@@ -40,10 +40,10 @@ ServerConfig& ServerConfig::operator=(const ServerConfig& src)
 	this->_httpMethods[GET] = src.getHttpMethods(GET);
 	this->_httpMethods[POST] = src.getHttpMethods(POST);
 	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);
-	this->_cgi = src.getMapCgi();
+	this->_CGI = src.getMapCGI();
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
-	this->_amountCgi = src.getAmountCgi();
+	this->_amountCGI = src.getAmountCGI();
 	return (*this);
 }
 
@@ -57,6 +57,7 @@ void	ServerConfig::init(std::string& str)
 	for (size_t i = 0; i < lines.size(); i++)
 	{
 		StringUtils::matchIdentifier(lines[i], identifier);
+		StringUtils::lowerCase(identifier);
 		if (!identifier.length())
 			continue;
 		if (identifier == "location")
@@ -78,7 +79,7 @@ void	ServerConfig::init(std::string& str)
 		else if (identifier == "limit_except")
 			this->setHttpMethods(lines[i]);
 		else if (identifier == "cgi")
-			this->setCgi(lines[i]);
+			this->setCGI(lines[i]);
 		else if (identifier == "upload")
 			this->setUploadDir(lines[i]);
 		else
@@ -95,7 +96,7 @@ void	ServerConfig::init(std::string& str)
 	this->setDefaultServerName();
 	this->_amountLocations = _locations.size();
 	this->_amountErrorpages = _errorPage.size();
-	this->_amountCgi = _cgi.size();
+	this->_amountCGI = _CGI.size();
 }
 
 void	ServerConfig::setDefaultServerName()
@@ -196,14 +197,13 @@ std::ostream &operator<<(std::ostream& out, const ServerConfig& loc)
 	out << "httpGET : " << loc.getHttpMethods(GET) << std::endl;
 	out << "httpPOST: " << loc.getHttpMethods(POST) << std::endl;
 	out << "httpDEL : " << loc.getHttpMethods(DELETE) << std::endl;
-	//cgi std::endl;
-	//cgi
+	//CGI std::endl;
+	//CGI
 	out << "Upld Dir: " << loc.getUploadDir() << std::endl;
 	out << "AmntErrs: " << loc.getAmountErrorPages() << std::endl;
-	out << "boolcgi : " << loc.hasCgi() << std::endl;
-	out << "AmntCGIs: " << loc.getAmountCgi() << std::endl;
-	out << "Cgi pyth: " << loc.getCgi(".py") << std::endl;
-	out << "Cgi .php: " << loc.getCgi(".php") << std::endl;
-	out << "Cgi rand: " << loc.getCgi(".sfsdfdsf") << std::endl;
+	out << "AmntCGIs: " << loc.getAmountCGI() << std::endl;
+	out << "CGI pyth: " << loc.getCGI(".py") << std::endl;
+	out << "CGI .php: " << loc.getCGI(".php") << std::endl;
+	out << "CGI rand: " << loc.getCGI(".sfsdfdsf") << std::endl;
 	return (out);
 }

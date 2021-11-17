@@ -14,6 +14,7 @@ class Request
 		Request			&operator=(Request const &src);
 
 		// Getters and setters
+		void			reset();
 		std::string		getMethod() const;
 		std::string		getURI() const;
 		std::string		getQueryString() const;
@@ -22,6 +23,7 @@ class Request
 		std::string		getBody() const;
 		std::string		getMatchedServerName() const;
 		std::string		getPort();
+		size_t			getBodyLength() const;
 		void			setMethod(std::string const &method);
 		void			setURI(std::string const &URI);
 		void			setQueryString(std::string const &queryString);
@@ -29,6 +31,7 @@ class Request
 		void			setHeader(std::string const &header);
 		void			setBody(std::string const &body);
 		void			setMatchedServerName(std::string const &matchedServerName);
+		void			modifyBodyLength(int length);
 
 	private:
 		// Private variables
@@ -39,6 +42,7 @@ class Request
 		std::map<std::string, std::string>	_headers;
 		std::string							_body;
 		std::string							_matchedServerName;
+		size_t								_bodyLength;
 
 		// Private functions
 };

@@ -27,6 +27,13 @@ Client			&Client::operator=(Client const &src)
 	return *this;
 }
 
+void			Client::reset()
+{
+	this->_request.reset();
+	this->_response.reset();
+	this->_incomingMessage.clear();
+}
+
 Client::~Client()
 {
 }
@@ -40,17 +47,17 @@ Client::Client(int socketFD, struct sockaddr *addressInfo) : fd(socketFD), _requ
 	this->_address.append(addressBuffer);
 }
 
-Request			&Client::getRequest()
+Request				&Client::getRequest()
 {
 	return this->_request;
 }
 
-Response		&Client::getResponse()
+Response			&Client::getResponse()
 {
 	return this->_response;
 }
 
-std::string		&Client::getAddress()
+std::string			&Client::getAddress()
 {
 	return this->_address;
 }
@@ -60,7 +67,7 @@ std::string const	&Client::getIncomingMessage()
 	return this->_incomingMessage;
 }
 
-void			Client::setIncomingMessage(std::string const &message)
+void				Client::setIncomingMessage(std::string const &message)
 {
 	this->_incomingMessage.append(message);
 }
