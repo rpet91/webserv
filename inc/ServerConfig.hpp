@@ -25,7 +25,7 @@ class ServerConfig : public Config
 		const std::string&				getDefaultServerName() const;
 		const std::vector<size_t>&		getPort() const;
 		const std::vector<std::string>&	getServerNames() const;
-		const LocationConfig&			getLocationConfig(std::string path) const;
+		const LocationConfig*			getLocationConfig(const std::string& path) const;
 
 		//set()
 		void	setDefaultServerName();

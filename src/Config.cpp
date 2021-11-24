@@ -33,13 +33,14 @@ Config&	Config::operator=(const Config& src)
 	this->_index = src.getIndex();
 	this->_autoindex = src.getAutoindex();
 	this->_errorPage = src.getMapErrorPages();
-	this->_httpMethods[GET] = src._httpMethods[GET];
-	this->_httpMethods[POST] = src._httpMethods[POST];
-	this->_httpMethods[DELETE] = src._httpMethods[DELETE];
+	this->_httpMethods[GET] = src.getHttpMethods(GET);
+	this->_httpMethods[POST] = src.getHttpMethods(POST);
+	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);;
 	this->_CGI = src.getMapCGI();
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
 	this->_amountCGI = src.getAmountCGI();
+	this->_redirection = src.getRedirection();
 	return (*this);
 }
 
@@ -124,6 +125,11 @@ const std::string	Config::getCGI(const std::string& string) const
 	return ("");
 }
 
+bool	Config::hasUploadDir() const
+{
+	return (this->_uploadDir != "");
+}
+
 const std::string&  Config::getUploadDir() const
 {
 	return (this->_uploadDir);
@@ -160,6 +166,7 @@ void	Config::setLimitClientBodySize(const std::string& str)
 	size_t						maxBodySize;
 	std::vector<std::string>	vec;
 	size_t						multiplyBytes = 1;
+	const size_t				max = 0 - 1;
 
 	StringUtils::split(str, Whitespaces, vec);
 	if (vec.size() == 1)
@@ -188,7 +195,7 @@ void	Config::setLimitClientBodySize(const std::string& str)
 	ss >> maxBodySize;
 	this->_limitClientBodySize = maxBodySize * multiplyBytes;
 	if (this->_limitClientBodySize < maxBodySize)
-		throw std::runtime_error("configfile: client_max_body_size is too large");
+		this->_limitClientBodySize = max;
 }
 
 void	Config::setRoot(const std::string& str)
@@ -263,7 +270,8 @@ void	Config::setCGI(const std::string& str)
 	StringUtils::split(str, Whitespaces, vec);
 	if (vec.size() != 3)
 		throw std::runtime_error("configfile: CGI bad formatting");
-	this->_CGI.insert(std::pair<std::string, std::string>(vec[1], vec[2]));
+	// this->_CGI.insert(std::pair<std::string, std::string>(vec[1], vec[2]));
+	this->_CGI[vec[1]] = vec[2];
 }
 
 void	Config::setUploadDir(const std::string& str)
@@ -287,5 +295,28 @@ void	Config::setErrorPage(const std::string& str)
 		throw std::runtime_error("configfile: bad formatting errorpage");
 	ss << vec[1];
 	ss >> errorNum;
-	this->_errorPage.insert(std::pair<size_t, std::string>(errorNum, vec[2]));
+	// this->_errorPage.insert(std::pair<size_t, std::string>(errorNum, vec[2]));
+	this->_errorPage[errorNum] = vec[2];
+}
+
+bool	Config::isRedirection() const
+{
+	return (this->_redirection != "");
+}
+
+const std::string&	Config::getRedirection() const
+{
+	return (this->_redirection);
+}
+
+void	Config::setRedirection(const std::string& str)
+{
+	std::vector<std::string> vec;
+
+	StringUtils::split(str, Whitespaces, vec);
+	if (vec.size() != 3)
+		throw std::runtime_error("configfile: bad formatting redirection");
+	if (vec[1] != "301")
+		throw std::runtime_error("configfile: redirection code must be 301");
+	this->_redirection = vec[2];
 }

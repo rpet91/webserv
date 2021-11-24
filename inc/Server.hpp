@@ -47,6 +47,7 @@ class Server
 		void		_closePipesAndError(Task &task, CGI *cgi);
 		int			_checkForInitialErrors(Task &task);
 		void		_deleteFile(Task &task, std::string const &path);
+		void		_setPageNotFoundError(Task &task);
 
 		// Private variables
 		ServerConfig	_config;

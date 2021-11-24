@@ -54,3 +54,6 @@ delete: all
 
 redirect: all
 	./$(NAME) config/redirecttest_config.conf
+
+autoindex: all
+	./$(NAME) config/autoindextest_config.conf

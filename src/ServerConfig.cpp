@@ -44,6 +44,7 @@ ServerConfig& ServerConfig::operator=(const ServerConfig& src)
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
 	this->_amountCGI = src.getAmountCGI();
+	this->_redirection = src.getRedirection();
 	return (*this);
 }
 
@@ -62,16 +63,16 @@ void	ServerConfig::init(std::string& str)
 			continue;
 		if (identifier == "location")
 			continue;
-		else if (identifier == "error_page")
-			this->setErrorPage(lines[i]);
 		else if (identifier == "listen")
 			this->setPort(lines[i]);
 		else if (identifier == "server_name")
 			this->setServerName(lines[i]);
-		else if (identifier == "client_max_body_size")
-			this->setLimitClientBodySize(lines[i]);
 		else if (identifier == "root")
 			this->setRoot(lines[i]);
+		else if (identifier == "error_page")
+			this->setErrorPage(lines[i]);
+		else if (identifier == "client_max_body_size")
+			this->setLimitClientBodySize(lines[i]);
 		else if (identifier == "index")
 			this->setIndex(lines[i]);
 		else if (identifier == "autoindex")
@@ -82,6 +83,8 @@ void	ServerConfig::init(std::string& str)
 			this->setCGI(lines[i]);
 		else if (identifier == "upload")
 			this->setUploadDir(lines[i]);
+		else if (identifier == "return")
+			this->setRedirection(lines[i]);
 		else
 			throw std::runtime_error("configfile: unknown identifier");
 	}
@@ -110,7 +113,7 @@ void	ServerConfig::setPort(const std::string& str)
 {
 	std::vector<std::string> vec;
 
-	StringUtils::split(str, " \t\n", vec);
+	StringUtils::split(str, Whitespaces, vec);
 	for (size_t i = 1; i < vec.size(); i++)
 	{
 		std::stringstream	ss;
@@ -131,7 +134,7 @@ void	ServerConfig::setServerName(const std::string& str)
 {
 	std::vector<std::string> vec;
 
-	StringUtils::split(str, " \t\n", vec);
+	StringUtils::split(str, Whitespaces, vec);
 	if (vec.size() <= 1)
 		vec.push_back("");
 	vec.erase(vec.begin());
@@ -143,7 +146,7 @@ void	ServerConfig::setLocationConfig(const std::string& str)
 	std::vector<std::string>	vec;
 	LocationConfig				locationConfig;
 
-	StringUtils::split(str, " \t\n", vec);
+	StringUtils::split(str, Whitespaces, vec);
 	if (vec.size() != 3)
 		throw std::runtime_error("configfile: location bad formatting");
 	locationConfig.setPath(vec[1]);
@@ -167,12 +170,36 @@ const std::vector<std::string>&	ServerConfig::getServerNames() const
 	return (this->_serverNames);
 }
 
-const LocationConfig&	ServerConfig::getLocationConfig(std::string path) const
+static size_t	getMatchLength(const std::string& URI, const std::string& locationPath)
 {
-	std::map<std::string, LocationConfig>::const_iterator	it = this->_locations.find(path);
-	if (it == this->_locations.end())
-		return (this->_locations.begin()->second);
-	return (it->second);
+	size_t	matchLength = 0;
+
+	if (locationPath.size() > URI.size())
+		return (0);
+	for (size_t i = 0; i < locationPath.size(); i++)
+	{
+		if (locationPath[i] != URI[i])
+			return (0);
+		matchLength++;
+	}
+	return (matchLength);
+}
+
+const LocationConfig*	ServerConfig::getLocationConfig(const std::string& path) const
+{
+	std::map<std::string, LocationConfig>::const_iterator	it = this->_locations.begin();
+	const std::map<std::string, LocationConfig>::const_iterator	itend = this->_locations.end();
+	const LocationConfig	*bestMatch = NULL;
+	size_t					bestMatchLength = 0;
+
+	while (it != itend)
+	{
+		size_t	matchLength = getMatchLength(path, it->first);
+		if (matchLength > bestMatchLength)
+			bestMatch = &it->second;
+		it++;
+	}
+	return (bestMatch);
 }
 
 size_t	ServerConfig::getAmountLocations() const
@@ -188,22 +215,20 @@ std::ostream &operator<<(std::ostream& out, const ServerConfig& loc)
 	out << "Port nrs: "; for (size_t i = 0; i < loc.getPort().size(); i++){out << loc.getPort()[i] << " ";} out << std::endl;
 	out << "ServNmes: "; for (size_t i = 0; i < loc.getServerNames().size(); i++){out << loc.getServerNames()[i] << " ";} out << std::endl;
 
-
 	out << "BodySize: " << loc.getLimitClientBodySize() << std::endl;
 	out << "LocaRoot: " << loc.getRoot() << std::endl;
 	out << "indexVec: "; for (size_t i = 0; i < loc.getIndex().size(); i++){out << loc.getIndex()[i] << " ";} out << std::endl;
 	out << "Autoindx: " << loc.getAutoindex() << std::endl;
-	//errorpages
+
 	out << "httpGET : " << loc.getHttpMethods(GET) << std::endl;
 	out << "httpPOST: " << loc.getHttpMethods(POST) << std::endl;
 	out << "httpDEL : " << loc.getHttpMethods(DELETE) << std::endl;
-	//CGI std::endl;
-	//CGI
+
 	out << "Upld Dir: " << loc.getUploadDir() << std::endl;
+	out << "Redir   : " << loc.getRedirection() << std::endl;
 	out << "AmntErrs: " << loc.getAmountErrorPages() << std::endl;
 	out << "AmntCGIs: " << loc.getAmountCGI() << std::endl;
-	out << "CGI pyth: " << loc.getCGI(".py") << std::endl;
-	out << "CGI .php: " << loc.getCGI(".php") << std::endl;
-	out << "CGI rand: " << loc.getCGI(".sfsdfdsf") << std::endl;
+	out << "CGI all :\n"; for (std::map<std::string, std::string>::const_iterator it = loc.getMapCGI().begin(); it != loc.getMapCGI().end(); it++){out << "\tcgi ext: " << it->first << " " << it->second << std::endl;}
+	out << "Errorpgs:\n"; for (std::map<size_t, std::string>::const_iterator it = loc.getMapErrorPages().begin(); it != loc.getMapErrorPages().end(); it++){out << "\terr num: " << it->first << " " << it->second << std::endl;}
 	return (out);
 }

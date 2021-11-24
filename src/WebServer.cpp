@@ -123,14 +123,11 @@ void		WebServer::run()
 				if (currentTask.type == Task::CLIENT_RESPONSE)
 				{
 					this->_sendResponse(currentTask);
-			//		this->_markFDForRemoval(it->first, this->_writeable, WRITE);
 					FD_CLR(it->first, &this->_writeable);
 				}
 				else if (currentTask.type == Task::FILE_WRITE)
 				{
-					std::cout << "Lekkchr raiteh" << std::endl;
 					this->_writeFile(currentTask);
-			//		this->_markFDForRemoval(it->first, this->_writeable, WRITE);
 					std::cout << "Lekkchr gerait" << std::endl;
 				}
 				else if(currentTask.type == Task::CGI_WRITE)
@@ -489,9 +486,21 @@ void		WebServer::_readFile(Task &task)
  */
 void		WebServer::_writeFile(Task &task)
 {
-	std::cout << "het is tijd om te schrijven" << std::endl;
-	(void) task;
-	exit(0);
+	std::cout << "het is tijd om te schrijven naar fd: " << task.fd << std::endl;
+	std::stringstream	conversionStream;
+	size_t				contentLength;
+	std::string			body = task.client->getRequest().getBody();
+	Task				responseTask;
+
+	conversionStream << task.client->getRequest().getHeader("Content-Length");
+	conversionStream >> contentLength;
+	std::cout << "BODDUDUDUDUDDU: [" << body << "] with size: " << contentLength << std::endl;
+	write(task.fd, body.c_str(), contentLength);
+	close(task.fd);
+	responseTask.type = Task::CLIENT_RESPONSE;
+	responseTask.client = task.client;
+	responseTask.fd = task.client->fd;
+	this->_addTask(responseTask);
 	this->_markFDForRemoval(task.fd, this->_writeable, WRITE);
 }
 

@@ -13,6 +13,7 @@ class	LocationConfig : public Config
 		//constructors
 		virtual ~LocationConfig();
 		LocationConfig();
+		LocationConfig(const LocationConfig*);
 		LocationConfig(const LocationConfig&);
 		LocationConfig(const ServerConfig&);
 		LocationConfig&	operator=(const LocationConfig&);

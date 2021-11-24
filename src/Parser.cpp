@@ -83,7 +83,7 @@ void	Parser::syntaxErrorCheck() const
 
 static bool	isEndSemicolon(const std::string& str)
 {
-	size_t pos = str.find_last_not_of(" \t\n");
+	size_t pos = str.find_last_not_of(Whitespaces);
 	if (pos == std::string::npos)
 		return (false);
 	return (str[pos] == ';');
@@ -100,17 +100,17 @@ void	Parser::semicolonsErrorCheck() const
 	{
 		if (isEndSemicolon(lines[i]) == false)
 		{
-			pos = lines[i].find_last_not_of(" \t\n");
+			pos = lines[i].find_last_not_of(Whitespaces);
 			if (lines[i][pos] == '}')
 				continue;
-			pos = lines[i].find_last_not_of(" \t\n");
+			pos = lines[i].find_last_not_of(Whitespaces);
 			if (lines[i][pos] == '{')
 				continue;
 			if (i + 1 < lines.size())
 				i++;
 			else
 				throw std::runtime_error("configfile: missing semicolon (1)");
-			pos = lines[i].find_last_not_of(" \t\n");
+			pos = lines[i].find_last_not_of(Whitespaces);
 			if (lines[i][pos] == '{')
 				continue;
 			throw std::runtime_error("configfile: missing semicolon (2)");

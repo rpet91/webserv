@@ -3,8 +3,6 @@
 #include <vector>
 #include <iostream>
 
-#define WHITESPACES " \t\n"
-
 void	StringUtils::trim(std::string& str, const char *chars)
 {
 	size_t start = str.find_first_not_of(chars);
@@ -12,7 +10,10 @@ void	StringUtils::trim(std::string& str, const char *chars)
 		start = 0;
 	size_t end = str.find_last_not_of(chars);
 	if (end == std::string::npos)
-		end = str.length();
+	{
+		str = ";";
+		return;
+	}
 	size_t len = end - start + 1;
 	str = str.substr(start, len);
 }
@@ -23,7 +24,7 @@ void	StringUtils::trimBraces(std::string& str)
 	size_t end = str.rfind('}');
 	size_t len = end - start - 1;
 	str = str.substr(start + 1, len);
-	trim(str, WHITESPACES);
+	trim(str, Whitespaces);
 }
 
 std::string	StringUtils::substrDelimiter(size_t *startPosition, std::string const &source, std::string const &delimiter)
@@ -84,7 +85,7 @@ void	StringUtils::split(const std::string& str, const char* delims, std::vector<
 		if (subLength)
 		{
 			std::string sub = str.substr(posBegin, subLength);
-			StringUtils::trim(sub, WHITESPACES);
+			StringUtils::trim(sub, Whitespaces);
 			out.push_back(sub);
 		}
 		posBegin = posEnd + 1;
@@ -106,7 +107,7 @@ void	StringUtils::splitNoBraces(const std::string& str, const char* delims, std:
 		if (subLength)
 		{
 			std::string sub = str.substr(posBegin, subLength);
-			StringUtils::trim(sub, WHITESPACES);
+			StringUtils::trim(sub, Whitespaces);
 			out.push_back(sub);
 		}
 		posBegin = posEnd + 1;
@@ -122,12 +123,12 @@ void	StringUtils::splitServers(const std::string& str, std::vector<std::string>&
 
 	while (posBegin < str.length())
 	{
-		posBegin = str.find_first_not_of(WHITESPACES, posBegin);
+		posBegin = str.find_first_not_of(Whitespaces, posBegin);
 		if (posBegin == std::string::npos)
 			return;
 		if (str.compare(posBegin, 6, "server"))
 			throw std::runtime_error("configfile: not a server");
-		braceOpen = str.find_first_not_of(WHITESPACES, posBegin + 6);
+		braceOpen = str.find_first_not_of(Whitespaces, posBegin + 6);
 		if (braceOpen == std::string::npos)
 			throw std::runtime_error("configfile: server missing body");
 		if (str[braceOpen] != '{')
@@ -137,7 +138,7 @@ void	StringUtils::splitServers(const std::string& str, std::vector<std::string>&
 		if (subLength)
 		{
 			std::string substr = str.substr(posBegin, subLength);
-			StringUtils::trim(substr, WHITESPACES);
+			StringUtils::trim(substr, Whitespaces);
 			out.push_back(substr);
 		}
 		posBegin = posEnd + 1;
@@ -148,7 +149,7 @@ void	StringUtils::matchIdentifier(const std::string& str, std::string& identifie
 {
 	std::vector<std::string> vec;
 
-	StringUtils::split(str, WHITESPACES, vec);
+	StringUtils::split(str, Whitespaces, vec);
 	if (vec.size())
 		identifier = vec[0];
 	else

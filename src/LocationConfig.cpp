@@ -17,6 +17,11 @@ LocationConfig::LocationConfig()
 	// std::cout << "Constructor called (LocationConfig)" << std::endl;
 }
 
+LocationConfig::LocationConfig(const LocationConfig* src)
+{
+	*this = *src;
+}
+
 LocationConfig::LocationConfig(const LocationConfig& src)
 {
 	// std::cout << "Copy Constructor called (LocationConfig)" << std::endl;
@@ -65,6 +70,7 @@ LocationConfig&	LocationConfig::operator=(const LocationConfig& src)
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
 	this->_amountCGI = src.getAmountCGI();
+	this->_redirection = src.getRedirection();
 	return (*this);
 }
 
@@ -73,7 +79,7 @@ void	LocationConfig::init(const std::string& data)
 	std::vector<std::string>	tokens;
 	std::vector<std::string>	lines;
 
-	StringUtils::split(data, " \t\n", tokens);
+	StringUtils::split(data, Whitespaces, tokens);
 	if (tokens.size() != 3)
 		throw std::runtime_error("configfile: location has bad formatting");
 	this->_path = tokens[1];
@@ -86,6 +92,8 @@ void	LocationConfig::init(const std::string& data)
 		StringUtils::lowerCase(identifier);
 		if (identifier == "root")
 			this->setRoot(lines[i]);
+		else if (identifier == "error_page")
+			this->setErrorPage(lines[i]);
 		else if (identifier == "client_max_body_size")
 			this->setLimitClientBodySize(lines[i]);
 		else if (identifier == "index")
@@ -98,6 +106,8 @@ void	LocationConfig::init(const std::string& data)
 			this->setCGI(lines[i]);
 		else if (identifier == "upload")
 			this->setUploadDir(lines[i]);
+		else if (identifier == "return")
+			this->setRedirection(lines[i]);
 		else
 			throw std::runtime_error("configfile: unknown identifier in location");
 	}
@@ -125,8 +135,8 @@ std::ostream &operator<<(std::ostream& out, const LocationConfig& loc)
 	out << "httpPOST: " << loc.getHttpMethods(POST) << std::endl;
 	out << "httpDEL : " << loc.getHttpMethods(DELETE) << std::endl;
 	out << "Upld Dir: " << loc.getUploadDir() << std::endl;
-	out << "CGI     : " << loc.getCGI(".php") << " | " << loc.getCGI(".py") << std::endl;
+	out << "Redir   : " << loc.getRedirection() << std::endl;
+	out << "CGI all :\n"; for (std::map<std::string, std::string>::const_iterator it = loc.getMapCGI().begin(); it != loc.getMapCGI().end(); it++){out << "\tcgi ext: " << it->first << " " << it->second << std::endl;}
+	out << "Errorpgs:\n"; for (std::map<size_t, std::string>::const_iterator it = loc.getMapErrorPages().begin(); it != loc.getMapErrorPages().end(); it++){out << "\terr num: " << it->first << " " << it->second << std::endl;}
 	return (out);
 }
-
-

@@ -14,6 +14,7 @@
 #include <sys/stat.h>			// stat
 #include <sstream>				// std::stringstream
 #include <dirent.h>				// opendir
+#include <sys/errno.h>			// errno
 
 #include <iostream>		// DEBUG
 
@@ -61,33 +62,31 @@ const ServerConfig		&Server::getConfig() const
  */
 void		Server::handleConnection(Task &task)
 {
+	task.server = this;
+	
 	std::string				URI = task.client->getRequest().getURI();
-	LocationConfig			location = this->_config.getLocationConfig(URI);
-	std::string				root = location.getRoot();
+	LocationConfig const	*location = this->_config.getLocationConfig(URI);
+
+	if (this->_checkForInitialErrors(task))
+		return this->_checkErrorPath(task);
+
+	std::string				root = location->getRoot();
 	std::string				pathName = root + URI;
 	std::string				method = task.client->getRequest().getMethod();
-//	std::string				redirect = this->_config.getRedirection(); // A function which will return a string to the redirection path. It returns an empty string if no redirection was found. 
-	std::string				redirect = "";
+	std::string				redirect = location->getRedirection();
 
-	//hardcoded redirect so it will redirect "/redirect/" to "/". In the configfile it should be something like "return 301 /;"
-	if (URI == "/redirect/")
-		redirect = "/";
-
-	task.server = this;
-	if (this->_checkForInitialErrors(task))
-	{
-		this->_checkErrorPath(task);
-		return ;
-	}
-
-	// Checks if the server has a redirection.
+	// Checks if we have to redirect our request.
 	if (redirect != "")
 	{
+		location = this->_config.getLocationConfig(redirect);
+		if (!location)
+			return this->_setPageNotFoundError(task);
+		task.client->getResponse().setStatusCode(301);
 		task.client->getRequest().setURI(redirect);
 		URI = redirect;
+		root = location->getRoot();
 		pathName = root + URI;
-		task.client->getResponse().setStatusCode(301);
-		location = this->_config.getLocationConfig(URI);
+		task.client->getResponse().setHeader("Location: " + URI);
 	}
 
 	// Checks of the requested URI end with a /
@@ -96,9 +95,10 @@ void		Server::handleConnection(Task &task)
 		std::string		currentIndexPage;
 		bool			validIndexPage = false;
 
-		for (size_t i = 0; i < location.getIndex().size(); i++)
+		// Tries to find a valid index page in the requested path.
+		for (size_t i = 0; i < location->getIndex().size(); i++)
 		{
-			currentIndexPage = location.getIndex()[i];
+			currentIndexPage = location->getIndex()[i];
 			if (this->_pathType(pathName + currentIndexPage) == DOCUMENT)
 			{
 				pathName.append(currentIndexPage);
@@ -108,14 +108,11 @@ void		Server::handleConnection(Task &task)
 		}
 		if (validIndexPage == false)
 		{
-			if (location.getAutoindex())
-			{
-				std::cout << "autoindex staat aan bitches" << std::endl;
+			// If we didn't find a valid index page, we check if we have an autoindex.
+			if (location->getAutoindex())
 				this->_generateDirectoryListing(task, URI);
-			}
 			else
 			{
-				std::cout << "geen autoindex, tijd voor een 403" << std::endl;
 				task.client->getResponse().setStatusCode(403);
 				this->_checkErrorPath(task);
 			}
@@ -124,10 +121,7 @@ void		Server::handleConnection(Task &task)
 	}
 	std::cout << "uiteindelijke pathname: " << pathName << std::endl;
 	if (method == "DELETE")
-	{
-		this->_deleteFile(task, pathName);
-		return ;
-	}
+		return this->_deleteFile(task, pathName);
 
 	bool	get = (method == "GET");
 	if (this->_config.hasCGI(URI) == true)
@@ -155,7 +149,19 @@ void		Server::handleConnection(Task &task)
 	else
 	{
 		std::cout << "We DO NOT have a CGI for: " << URI << std::endl;
-		task.type = (get == true) ? Task::FILE_READ : Task::FILE_WRITE;
+		if (get == true)
+			task.type = Task::FILE_READ;
+		else
+		{
+			if (location->hasUploadDir() == false)
+			{
+				std::cout << "we hebben geen uploaddir in de config" << std::endl;
+				return this->_setPageNotFoundError(task); // 404? Is dit de goeie error?
+			}
+			task.type = Task::FILE_WRITE;
+			pathName = location->getUploadDir() + URI;
+			std::cout << "upload pathname: " << pathName << std::endl;
+		}
 		task.fd = this->_openFile(task, pathName);
 		if (task.fd < 0)
 			this->_checkErrorPath(task);
@@ -185,11 +191,14 @@ int			Server::_openFile(Task &task, std::string &pathName)
 	}
 	else if (clientRequest == "POST")
 	{
-		response.setStatusCode(201);
 		if (this->_isValidContentLength(task) < 0)
 			return -1;
-		if ((fd = open(pathName.c_str(), O_CREAT | O_WRONLY | O_TRUNC)) < 0)
+		if ((fd = open(pathName.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644)) < 0)
+		{
+			perror("ja kka");
 			response.setStatusCode(403);
+		}
+		response.setStatusCode(201);
 	}
 	else if (clientRequest == "OTHER")
 	{
@@ -208,9 +217,16 @@ int			Server::_openFile(Task &task, std::string &pathName)
  */
 void		Server::_checkErrorPath(Task &task)
 {
-	size_t				errorCode = task.client->getResponse().getStatusCode();
-	bool				hasErrorPage = this->_config.hasErrorPage(errorCode);
-	std::string			errorConfigPath;
+	size_t					errorCode = task.client->getResponse().getStatusCode();
+	std::string				errorConfigPath;
+	std::string				URI = task.client->getRequest().getURI();
+	LocationConfig const	*location = this->_config.getLocationConfig(URI);
+	bool					hasErrorPage;
+
+	if (location)
+		hasErrorPage = location->hasErrorPage(errorCode);
+	else
+		hasErrorPage = false;
 
 	std::cout << "ERROR HANDELEN" << std::endl;
 	task.fd = 0;
@@ -219,7 +235,7 @@ void		Server::_checkErrorPath(Task &task)
 	{
 		task.type = Task::FILE_READ;
 		std::cout << "De error page van code: " << errorCode << " bestaat!" << std::endl;
-		errorConfigPath = this->_config.getErrorPage(errorCode);
+		errorConfigPath = this->_config.getLocationConfig(URI)->getErrorPage(errorCode);
 		std::cout << "ERROR CONFIG PATH: " << errorConfigPath << std::endl;
 		task.fd = this->_openFile(task, errorConfigPath);
 		if (task.fd == -1)
@@ -257,6 +273,8 @@ int			Server::_isValidContentLength(Task &task)
 	size_t					givenContentLength;
 	std::stringstream		conversionStream;
 	Request					&request = task.client->getRequest();
+	std::string				URI = task.client->getRequest().getURI();
+	LocationConfig const	*location = this->_config.getLocationConfig(URI);
 	
 	conversionStream << request.getHeader("Content-Length");
 	conversionStream >> givenContentLength;
@@ -265,9 +283,8 @@ int			Server::_isValidContentLength(Task &task)
 		task.client->getResponse().setStatusCode(400);
 		return -1;
 	}
-	else if (task.server->getConfig().getLimitClientBodySize() < givenContentLength)
+	else if (location->getLimitClientBodySize() < givenContentLength)
 	{
-		std::cout << "wtf?" << std::endl;
 		task.client->getResponse().setStatusCode(413);
 		return -1;
 	}
@@ -284,7 +301,7 @@ void		Server::_generateDirectoryListing(Task &task, std::string const &URI)
 	std::string		endBody = "\r\n</pre>\r\n<hr>\r\n<p>&copy; Spinnenwebservetjes</p></body>\r\n</html>\r\n";
 	DIR				*dir;
 	struct dirent	*entry;
-	std::string		pathName = this->_config.getLocationConfig(URI).getRoot() + URI;
+	std::string		pathName = this->_config.getLocationConfig(URI)->getRoot() + URI;
 	std::string		name;
 	std::string		link;
 	std::string		directoryList;
@@ -292,11 +309,7 @@ void		Server::_generateDirectoryListing(Task &task, std::string const &URI)
 
 	dir = opendir(pathName.c_str());
 	if (!dir)
-	{
-		task.client->getResponse().setStatusCode(404);
-		this->_checkErrorPath(task);
-		return ;
-	}
+		return this->_setPageNotFoundError(task);
 	entry = readdir(dir); // The first entry "." should not be visible in the autoindex
 	while ((entry = readdir(dir)) != NULL)
 	{
@@ -324,7 +337,7 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 	pid_t		pid;
 	bool		post = (task.client->getRequest().getMethod() == "POST") ? true : false;
 
-	// Checks if the content length doesn't override the accepted limit
+	// Checks if the content length doesn't override the accepted limit.
 	if (post && this->_isValidContentLength(task) < 0)
 	{
 		std::cout << "CGI content length is invalid " << std::endl;
@@ -343,8 +356,7 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 		task.client->getResponse().setStatusCode(500);
 		return ;
 	}
-	// Create the pipe that we will use to write input to the CGI, if we have POST
-	// info.
+	// Create the pipe that we will use to write input to the CGI, if we have POST info.
 	if (post && pipe(cgi->fdin) < 0)
 	{
 		this->_closePipesAndError(task, cgi);
@@ -398,8 +410,8 @@ void	Server::_setEnvironmentVars(Task &task)
 	std::cout << "CGI vars zetten in child process" << std::endl;
 	Request					request = task.client->getRequest();
 	std::string				URI = task.client->getRequest().getURI();
-	LocationConfig const	location = this->_config.getLocationConfig(URI);
-	std::string				root = location.getRoot();
+	LocationConfig const	*location = this->_config.getLocationConfig(URI);
+	std::string				root = location->getRoot();
 	std::string				cwd = std::string(getcwd(0, 0)) + '/';
 
 	this->_trySetVar("CONTENT_TYPE", request.getHeader("Content-Type"));
@@ -453,16 +465,24 @@ void	Server::_closePipesAndError(Task &task, CGI *cgi)
  */
 int		Server::_checkForInitialErrors(Task &task)
 {
-	Response		&clientResponse = task.client->getResponse();
-	std::string		method = task.client->getRequest().getMethod();
-	std::string		protocol = task.client->getRequest().getProtocol();
-	std::string		URI = task.client->getRequest().getURI();
+	Response				&clientResponse = task.client->getResponse();
+	std::string				method = task.client->getRequest().getMethod();
+	std::string				protocol = task.client->getRequest().getProtocol();
+	std::string				URI = task.client->getRequest().getURI();
+	LocationConfig const	*location = this->_config.getLocationConfig(URI);
 
 	// Checks if we already had an error before we entered handle connection.
 	if (clientResponse.isError())
 		return 1;
+	// Checks if we got a valid location block. If not, we send an 404 error.
+	else if (!location)
+	{
+		std::cout << "geen geldige location block gevonden" << std::endl;
+		clientResponse.setStatusCode(404);
+		return 1;
+	}
 	// Checks if the request of the client is accepted by the config file.
-	else if (task.server->getConfig().isValidHttpMethod(method) == false)
+	else if (location->isValidHttpMethod(method) == false)
 	{
 		std::cout << "invalid method" << std::endl;
 		clientResponse.setStatusCode(405);
@@ -483,11 +503,10 @@ int		Server::_checkForInitialErrors(Task &task)
  */
 void	Server::_deleteFile(Task &task, std::string const &path)
 {
-	int ret = remove(path.c_str());
-	std::cout << "tijd om iets te duhlietun. ret: " << ret << std::endl;
-	if (ret < 0)
+	std::cout << "tijd om iets te duhlietun." << std::endl;
+	if (remove(path.c_str()) < 0)
 	{
-		if (ret == EACCES)
+		if (errno == EACCES)
 			task.client->getResponse().setStatusCode(403);
 		else
 			task.client->getResponse().setStatusCode(404);
@@ -496,4 +515,13 @@ void	Server::_deleteFile(Task &task, std::string const &path)
 		task.client->getResponse().setStatusCode(204);
 	task.fd = task.client->fd;
 	task.type = Task::CLIENT_RESPONSE;
+}
+
+/*
+ * This function will set the status code to 404. The most common error.
+ */
+void	Server::_setPageNotFoundError(Task &task)
+{
+	task.client->getResponse().setStatusCode(404);
+	this->_checkErrorPath(task);
 }

@@ -31,12 +31,15 @@ class Config
 		bool										hasErrorPage(size_t) const;
 		bool										hasCGI(const std::string&) const;
 		const std::string							getCGI(const std::string&) const;
+		bool										hasUploadDir() const;
 		const std::string&							getUploadDir() const;
 		size_t										getAmountErrorPages() const;
 		size_t										getAmountCGI() const;
 		const std::map<size_t, std::string>&		getMapErrorPages() const;
 		const std::map<std::string, std::string>&	getMapCGI() const;
 		bool										getHttpMethods(enum	e_httpMethods method) const;
+		bool										isRedirection() const;
+		const std::string&							getRedirection() const;
 
 		//set()
 		void	setLimitClientBodySize(const std::string&);
@@ -47,6 +50,7 @@ class Config
 		void	setCGI(const std::string&);
 		void	setUploadDir(const std::string&);
 		void	setErrorPage(const std::string&);
+		void	setRedirection(const std::string&);
 
 	protected:
 		size_t								_limitClientBodySize;
@@ -59,6 +63,7 @@ class Config
 		std::string							_uploadDir;
 		size_t								_amountErrorpages;
 		size_t								_amountCGI;
+		std::string							_redirection;
 
 	private:
 		const std::string*	lookUpCGI(const std::string& string) const;
