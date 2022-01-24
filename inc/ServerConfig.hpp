@@ -6,14 +6,11 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <iostream>
-
-class LocationConfig;
 
 class ServerConfig : public Config
 {
 	public:
-		//constructors()
+		//constructors
 		virtual ~ServerConfig();
 		ServerConfig();
 		ServerConfig(const ServerConfig&);
@@ -21,11 +18,12 @@ class ServerConfig : public Config
 		void			init(std::string& str);
 
 		//get()
-		size_t							getAmountLocations() const;
-		const std::string&				getDefaultServerName() const;
-		const std::vector<size_t>&		getPort() const;
-		const std::vector<std::string>&	getServerNames() const;
-		const LocationConfig*			getLocationConfig(const std::string& path) const;
+		size_t											getAmountLocations() const;
+		const std::string&								getDefaultServerName() const;
+		const std::vector<size_t>&						getPort() const;
+		const std::vector<std::string>&					getServerNames() const;
+		const LocationConfig*							getLocationConfig(const std::string& path) const;
+		const std::map<std::string, LocationConfig>&	getMapLocations() const;
 
 		//set()
 		void	setDefaultServerName();
@@ -39,8 +37,10 @@ class ServerConfig : public Config
 		std::vector<size_t>	    				_portNumber;
 		std::vector<std::string>				_serverNames;
 		std::map<std::string, LocationConfig>	_locations;
+
+		void	call(const std::string&, const std::string&);
 };
 
-std::ostream &operator<<(std::ostream& out, ServerConfig const& loc);
+std::ostream&	operator<<(std::ostream& out, const ServerConfig& server);
 
 #endif

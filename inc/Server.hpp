@@ -22,7 +22,7 @@ class Server
 		// Coplien form
 		Server(Server const &src);
 		virtual ~Server();
-		Server		&operator=(Server const &src);
+		Server	&operator=(Server const &src);
 
 		// Parameterized constructor
 		Server(ServerConfig const &conf);
@@ -39,7 +39,7 @@ class Server
 		int			_openFile(Task &client, std::string &pathName);
 		void		_checkErrorPath(Task &task);
 		PathType	_pathType(std::string const &path);
-		int			_isValidContentLength(Task &task);
+		bool		_isValidContentLength(Task &task);
 		void		_generateDirectoryListing(Task &task, std::string const &URI);
 		void		_launchCGI(Task &task, std::string const &CGIPath);
 		void		_setEnvironmentVars(Task &task);

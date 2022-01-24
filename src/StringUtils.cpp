@@ -1,7 +1,7 @@
-#include "StringUtils.hpp"
-#include <string>
-#include <vector>
-#include <iostream>
+#include "StringUtils.hpp"		// StringUtils
+#include <string>				// std::string
+#include <vector>				// std::vector
+#include <stdexcept>			// std::runtime_error
 
 void	StringUtils::trim(std::string& str, const char *chars)
 {
@@ -20,6 +20,7 @@ void	StringUtils::trim(std::string& str, const char *chars)
 
 void	StringUtils::trimBraces(std::string& str)
 {
+	
 	size_t start = str.find('{');
 	size_t end = str.rfind('}');
 	size_t len = end - start - 1;
@@ -59,7 +60,7 @@ static size_t	getCurlyBraceMatch(const std::string& str, size_t curlyBraceOpen)
 		else if (str[pos] == '}')
 			BraceSubString--;
 	}
-	return (pos);
+	return pos;
 }
 
 void	StringUtils::split(const std::string& str, const char* delims, std::vector<std::string>& out)
@@ -114,35 +115,37 @@ void	StringUtils::splitNoBraces(const std::string& str, const char* delims, std:
 	}
 }
 
-void	StringUtils::splitServers(const std::string& str, std::vector<std::string>& out)
+std::vector<std::string>	StringUtils::splitServers(const std::string& filecontents)
 {
+	std::vector<std::string>	vec;
 	size_t	posBegin = 0;
 	size_t	posEnd;
 	size_t	braceOpen;
 	size_t	subLength;
 
-	while (posBegin < str.length())
+	while (posBegin < filecontents.length())
 	{
-		posBegin = str.find_first_not_of(Whitespaces, posBegin);
+		posBegin = filecontents.find_first_not_of(Whitespaces, posBegin);
 		if (posBegin == std::string::npos)
-			return;
-		if (str.compare(posBegin, 6, "server"))
+			break;
+		if (filecontents.compare(posBegin, 6, "server"))
 			throw std::runtime_error("configfile: not a server");
-		braceOpen = str.find_first_not_of(Whitespaces, posBegin + 6);
+		braceOpen = filecontents.find_first_not_of(Whitespaces, posBegin + 6);
 		if (braceOpen == std::string::npos)
 			throw std::runtime_error("configfile: server missing body");
-		if (str[braceOpen] != '{')
+		if (filecontents[braceOpen] != '{')
 			throw std::runtime_error("configfile: server missing body");
-		posEnd = getCurlyBraceMatch(str, braceOpen);
+		posEnd = getCurlyBraceMatch(filecontents, braceOpen);
 		subLength = posEnd - posBegin + 1;
 		if (subLength)
 		{
-			std::string substr = str.substr(posBegin, subLength);
+			std::string substr = filecontents.substr(posBegin, subLength);
 			StringUtils::trim(substr, Whitespaces);
-			out.push_back(substr);
+			vec.push_back(substr);
 		}
 		posBegin = posEnd + 1;
 	}
+	return vec;
 }
 
 void	StringUtils::matchIdentifier(const std::string& str, std::string& identifier)
@@ -160,4 +163,20 @@ void	StringUtils::lowerCase(std::string& string)
 {
 	for (size_t i = 0; i < string.length(); i++)
 		string[i] = std::tolower(string[i]);
+}
+
+/*
+ * This function gets a substring from a bigger string from a starting
+ * position (which gets updated after, to point to the end of the returned
+ * substring), and a delimiter.
+ */
+std::string		StringUtils::getString(size_t *startPosition, std::string const &source, std::string const &delimiter)
+{
+	size_t			endPosition;
+	std::string		returnString;
+
+	endPosition = source.find(delimiter, *startPosition);
+	returnString = source.substr(*startPosition, endPosition - *startPosition);
+	*startPosition = endPosition + delimiter.size();
+	return returnString;
 }

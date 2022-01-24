@@ -1,8 +1,6 @@
-#include "WebServer.hpp"
-
-#include <iostream>	// DEBUG
-
-#include <sys/socket.h>		// socket, bind, listen, AF_INET, SOCK_STREAM, recv
+#include "WebServer.hpp"	// WebServer
+#include <sys/socket.h>		// socket, bind, listen, AF_INET, SOCK_STREAM,
+							// recv, getsockname
 #include <sys/select.h>		// select
 #include <netinet/in.h>		// struct sockaddr_in, INADDR_ANY
 #include <stdexcept>		// std::runtime_error
@@ -19,6 +17,9 @@
 #include "Request.hpp"		// Request
 #include "Response.hpp"		// Response
 #include "CGI.hpp"			// CGI
+#include "StringUtils.hpp"	// StringUtils
+#include <arpa/inet.h>		// inet_ntop, ntohs
+#include <cstdio>			// perror
 
 /*
  * The constructor is the only starting point for the WebServer. We
@@ -43,8 +44,6 @@ WebServer::~WebServer()
  */
 void		WebServer::run()
 {
-	std::cout << "Now entering main loop." << std::endl;
-
 	fd_set								read_tmp;
 	fd_set								write_tmp;
 	std::map<int, Task>::iterator		it;
@@ -56,57 +55,26 @@ void		WebServer::run()
 		this->_writeFDToRemove.clear();
 		read_tmp = this->_readable;
 		write_tmp = this->_writeable;
-		this->_debugPrintFDsInSet(read_tmp, 32);
-		this->_debugPrintFDsInSet(write_tmp, 32);
-		std::cout << "Er zijn nu " << this->_clientMap.size() << " clients." << std::endl;
-		std::cout << "we gaan nu select in" << std::endl;
-		std::cout << "Maps are length: " << this->_readTaskMap.size() << " and ";
-		std::cout << this->_writeTaskMap.size() << std::endl;
 		if (select(FD_SETSIZE, &read_tmp, &write_tmp, NULL, NULL) < 0)
 		{
-			std::cout << "HUILIE ER GING IETS OFUT" << std::endl;
-			perror("ofut");
-			// In the future we won't exit, this is for testing purposes.
-			exit(EXIT_FAILURE);
+			perror("select");
+			continue ;
 		}
 		for (it = this->_readTaskMap.begin(); it != this->_readTaskMap.end(); it++)
 		{
 			currentTask = it->second;
 			if (this->_isFDInRemovalSet(currentTask.fd, this->_readFDToRemove) == true)
 				continue ;
-			this->_debugCheckTaskFD(currentTask, "reading"); // debug
 			if (FD_ISSET(it->first, &read_tmp))
 			{
-				std::cout << "Fd " << it->first << " is set for reading" << std::endl;
 				if (currentTask.type == Task::WAIT_FOR_CONNECTION)
-				{
-					std::cout << "This was a server socket" << std::endl;
 					this->_acceptConnection(it->first);
-				}
 				else if (currentTask.type == Task::CLIENT_READ)
-				{
-					std::cout << "This was a client socket from which we will read" << std::endl;
 					this->_readRequest(this->_clientMap[it->first]);
-				}
 				else if (currentTask.type == Task::FILE_READ)
-				{
-					std::cout << "Lekkchr lezen" << std::endl;
 					this->_readFile(currentTask);
-
-					std::cout << "Lekkchr gelezen" << std::endl;
-				}
 				else if (currentTask.type == Task::CGI_READ)
-				{
-					std::cout << "CGI READ na select" << std::endl;
 					this->_readCGI(currentTask);
-				}
-				else
-				{
-					std::cout << "Something went wrong: unknown read task type" << std::endl;
-					currentTask.printType();
-					std::cout << std::endl;
-					exit(EXIT_FAILURE);
-				}
 			}
 		}
 		for (it = this->_writeTaskMap.begin(); it != this->_writeTaskMap.end(); it++)
@@ -114,45 +82,23 @@ void		WebServer::run()
 			currentTask = it->second;
 			if (this->_isFDInRemovalSet(currentTask.fd, this->_writeFDToRemove) == true)
 				continue ;
-			this->_debugCheckTaskFD(currentTask, "writing"); // debug
 			if (FD_ISSET(it->first, &write_tmp))
 			{
-				// write stuff
-				std::cout << "Fd " << it->first << " is set for writing" << std::endl;
-
 				if (currentTask.type == Task::CLIENT_RESPONSE)
 				{
-					this->_sendResponse(currentTask);
-					FD_CLR(it->first, &this->_writeable);
+					if (this->_sendResponse(currentTask))
+						FD_CLR(it->first, &this->_writeable);
 				}
 				else if (currentTask.type == Task::FILE_WRITE)
-				{
 					this->_writeFile(currentTask);
-					std::cout << "Lekkchr gerait" << std::endl;
-				}
 				else if(currentTask.type == Task::CGI_WRITE)
-				{
-					std::cout << "CGI WRITE na select" << std::endl;
 					this->_writeCGI(currentTask);
-				}
-				else
-				{
-					std::cout << "Something went wrong: unknown write task type" << std::endl;
-					currentTask.printType();
-					exit(EXIT_FAILURE);
-				}
 			}
 		}
 		for (std::vector<int>::iterator it = this->_readFDToRemove.begin(); it != this->_readFDToRemove.end(); it++)
-		{
 			this->_readTaskMap.erase(*it);
-			std::cout << "Removed fd [" << *it << "] from the read taskset." << std::endl;
-		}
 		for (std::vector<int>::iterator it = this->_writeFDToRemove.begin(); it != this->_writeFDToRemove.end(); it++)
-		{
 			this->_writeTaskMap.erase(*it);
-			std::cout << "Removed fd [" << *it << "] from the write taskset." << std::endl;
-		}
 	}
 }
 
@@ -162,8 +108,6 @@ void		WebServer::run()
  */
 void		WebServer::setup(std::vector<ServerConfig> const &serverConfigs)
 {
-	std::cout << "Opening sockets I guess" << std::endl;
-
 	// Iterate over the ServerConfigs we've received from the parser.
 	// Create a Server instance with this config for every port it wants
 	// to listen on.
@@ -177,17 +121,10 @@ void		WebServer::setup(std::vector<ServerConfig> const &serverConfigs)
 		current = *it;
 		ports = current.getPort();
 		for (portIt = ports.begin(); portIt != ports.end(); portIt++)
-		{
-			std::cout << "PORT: " << *portIt << std::endl;
 			this->_servers[*portIt].push_back(Server(current));
-		}
 	}
-	std::cout << "Er zijn " << this->_servers.size() << " ports open ??" << std::endl;
 	for (serverIt = this->_servers.begin(); serverIt != this->_servers.end(); serverIt++)
-	{
-		std::cout << "Port nr " << serverIt->first << " heeft " << serverIt->second.size() << " servers" << std::endl;
 		this->_sockets.push_back(this->_openSocket(serverIt->first));
-	}
 
 	// Zero out the fd sets.
 	FD_ZERO(&this->_readable);
@@ -198,7 +135,6 @@ void		WebServer::setup(std::vector<ServerConfig> const &serverConfigs)
 	Task							tmpTask;
 	for (socketIt = this->_sockets.begin(); socketIt != this->_sockets.end(); socketIt++)
 	{
-		std::cout << "Setting fd " << *socketIt << " to listen" << std::endl;
 		tmpTask.type = Task::WAIT_FOR_CONNECTION;
 		tmpTask.fd = *socketIt;
 		this->_addTask(tmpTask);
@@ -221,7 +157,7 @@ int			WebServer::_openSocket(int port)
 	int options = 1;
 	ret = setsockopt(socketFD, SOL_SOCKET, SO_REUSEPORT, &options, sizeof(options));
 	if (socketFD < 0)
-		throw std::runtime_error("idklmao");
+		throw std::runtime_error("Failed to set socket options.");
 
 	// Initialize the address struct that bind will use.
 	bzero(&serverAddress, sizeof(serverAddress));
@@ -232,10 +168,7 @@ int			WebServer::_openSocket(int port)
 	// Bind the socket to a port.
 	ret = bind(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
 	if (ret < 0)
-	{
-		perror("le socket");
 		throw std::runtime_error("Failed to bind socket to port.");
-	}
 
 	// Set the socket to listen for incoming connections.
 	ret = listen(socketFD, 10);
@@ -255,18 +188,19 @@ void		WebServer::_acceptConnection(int socketFD)
 	int					addressSize = sizeof(struct sockaddr_in);
 	int					clientSocketFD;
 
-	std::cout << "Accepting connection from socket " << socketFD << std::endl;
+	// Accept the incoming connection.
 	clientSocketFD = accept(socketFD, (struct sockaddr*)&clientAddress, (socklen_t*)&addressSize);
 	fcntl(clientSocketFD, F_SETFL, O_NONBLOCK);
-	std::cout << "New fd is [" << clientSocketFD << "]" << std::endl;
-	Client				client(clientSocketFD, (struct sockaddr*)&clientAddress);
+	Client				client(clientSocketFD, &clientAddress);
 	if (client.fd < 0)
 	{
-		perror("halp");
-		throw std::runtime_error("Failed to accept connection.");
+		perror("accept");
+		return ;
 	}
 	this->_clientMap[client.fd] = client;
-	Task		task(Task::CLIENT_READ, client.fd, 0, &this->_clientMap[client.fd]);
+
+	// Create a new task.
+	Task				task(Task::CLIENT_READ, client.fd, 0, &this->_clientMap[client.fd]);
 	this->_addTask(task);
 }
 
@@ -278,95 +212,28 @@ void		WebServer::_readRequest(Client &client)
 	char	buffer[RECVBUFFERSIZE + 1];
 	int		bytesRead;
 
-	// Read from the socket in a loop until we find '\r\n\r\n', signifying the
-	// end of the incoming message. If we read 0 bytes, the connection was
+	// Read from the socket. If we read 0 bytes, the connection was
 	// closed by the client.
 	bzero(buffer, RECVBUFFERSIZE + 1);
 	bytesRead = recv(client.fd, buffer, RECVBUFFERSIZE, 0);
-	std::cout << "BYTES READ: AAAAAAAAAAAAAH: " << bytesRead << std::endl;
 	if (bytesRead <= 0)
 	{
 		// Connection was closed on the client's side.
-		std::cout << "Closing client fd: [" << client.fd << "]" << std::endl;
 		close(client.fd);
 		this->_removeTasksForClient(client.fd);
 		this->_clientMap.erase(client.fd);
 		return ;
 	}
-	client.getRequest().modifyBodyLength(bytesRead);
-	client.setIncomingMessage(buffer);
 
-	std::string		incomingMessage = client.getIncomingMessage();
-	// If we didn't find the double line break, we return to read more in the future.
-	if (incomingMessage.find("\r\n\r\n") == std::string::npos)
+	// Update the request, and ask if we're done reading.
+	client.getRequest().setIncomingMessage(buffer, bytesRead);
+	if (!client.getRequest().isComplete())
 		return ;
-	else
-	{
-		// Find the content length. If we haven't read enough characters, return.
-		size_t		contentLengthPos = incomingMessage.find("Content-Length");
 
-		if (contentLengthPos != std::string::npos)
-		{
-			size_t				contentLength;
-			size_t				startPos;
-			size_t				endPos;
-			std::stringstream	conversionStream;
-			std::string			lengthString;
+	// Check if the request is bad from the start.
+	client.checkBadRequest();
 
-			// Find the start and end position of our content length.
-			startPos = std::string("Content-Length: ").length() + contentLengthPos;
-			endPos = incomingMessage.find("\r\n", startPos);
-
-			// Make a string of the content length and convert it to a size_t.
-			lengthString = incomingMessage.substr(startPos, endPos - startPos);
-			conversionStream << lengthString;
-			conversionStream >> contentLength;
-			if (client.getRequest().getBodyLength() - 4 < contentLength)
-				return ;
-		}
-	}
-	std::cout << std::endl;
-	std::cout << "[[[[[[[[[" << std::endl;
-	std::cout << client.getIncomingMessage();
-	std::cout << "]]]]]]]]]" << std::endl;
-	this->_processRequest(client, client.getIncomingMessage());
-}
-
-/*
- * This function processes the message that was sent by the client into the
- * component parts.
- */
-void		WebServer::_processRequest(Client &client, std::string requestMessage)
-{
-	size_t				lineStart;
-	size_t				prevStart;
-	std::string			header;
-	std::string			body;
-
-	// Process the first line into the separate pieces of information.
-	lineStart = 0;
-	client.getRequest().setMethod(this->_getString(&lineStart, requestMessage, " "));
-	client.getRequest().setURI(this->_getString(&lineStart, requestMessage, " "));
-	client.getRequest().setProtocol(this->_getString(&lineStart, requestMessage, "\r\n"));
-
-	// Process the headers.
-	while (true)
-	{
-		prevStart = lineStart;
-		header = this->_getString(&lineStart, requestMessage, "\r\n");
-		if (prevStart == lineStart || header == "")
-			break;
-		else
-			client.getRequest().setHeader(header);
-	}
-
-	// The header length is not part of the body length so we need to substract it.
-	client.getRequest().modifyBodyLength(-lineStart);
-	// Put the remaining message into the body.
-	body = this->_getString(&lineStart, requestMessage, "\r\n\r\n");
-	client.getRequest().setBody(body);
-
-	// Finally we find the server that needs to handle this request.
+	// Now find the server to handle this request.
 	this->_findServerForRequest(client);
 }
 
@@ -378,7 +245,6 @@ void		WebServer::_findServerForRequest(Client &client)
 	std::string									host;
 	std::string									hostName;
 	int											port;
-	size_t										colonPosition;
 	Task										task;
 	std::vector<Server>							serversForPort;
 	bool										serverFound;
@@ -391,15 +257,11 @@ void		WebServer::_findServerForRequest(Client &client)
 	// Find the port and hostname.
 	host = client.getRequest().getHeader("Host");
 	if (host == "")
-	{
-		std::cout << "Host header not found, panic and die" << std::endl;
-		exit(EXIT_FAILURE);
-	}
-	std::cout << "{" << host << "}" << std::endl;
-	colonPosition = host.find(":");
-	hostName = host.substr(0, colonPosition);
-	std::istringstream(host.substr(colonPosition + 1)) >> port;
-	std::cout << hostName << "," << port << std::endl;
+		hostName = client.getAddress();
+	else
+		hostName = host.substr(0, host.find(":"));
+	port = this->_getPortFromSocket(client.fd);
+	client.getRequest().setPort(port);
 
 	// Get the servers for this port.
 	serversForPort = this->_servers[port];
@@ -408,6 +270,8 @@ void		WebServer::_findServerForRequest(Client &client)
 	serverFound = false;
 	for (serverIt = serversForPort.begin(); serverIt != serversForPort.end(); serverIt++)
 	{
+		if (serverFound)
+			break;
 		serverConfig = serverIt->getConfig();
 		std::vector<std::string> const serverNames = serverConfig.getServerNames();
 		for (nameIt = serverNames.begin(); nameIt != serverNames.end(); nameIt++)
@@ -432,43 +296,24 @@ void		WebServer::_findServerForRequest(Client &client)
 }
 
 /*
- * This helper function gets a substring from a bigger string from a starting
- * position (which gets updated after, to point to the end of the returned
- * substring), and a delimiter.
- */
-std::string		WebServer::_getString(size_t *startPosition, std::string const &source, std::string const &delimiter)
-{
-	size_t			endPosition;
-	std::string		returnString;
-
-	endPosition = source.find(delimiter, *startPosition);
-	returnString = source.substr(*startPosition, endPosition - *startPosition);
-	*startPosition = endPosition + delimiter.size();
-	return returnString;
-}
-
-/*
  * This function reads a file into a buffer, to send to the Client later.
  */
 void		WebServer::_readFile(Task &task)
 {
-	std::cout << "It's time to do shit here" << std::endl;
 	char		buffer[READBUFFERSIZE + 1];
 	int			bytesRead;
-	std::string	fileRead;
 	Task		responseTask;
 
 	bzero(buffer, READBUFFERSIZE + 1);
 	bytesRead = read(task.fd, buffer, READBUFFERSIZE);
 	if (bytesRead < 0)
 	{
-		perror("stuk");
-		throw std::runtime_error("read error");
+		perror("read");
+		return ;
 	}
 	else if (bytesRead > 0)
 	{
-		fileRead.append(buffer, bytesRead);
-		task.client->getResponse().setBody(fileRead);
+		task.client->getResponse().setBody(buffer, bytesRead);
 		return ;
 	}
 
@@ -478,7 +323,6 @@ void		WebServer::_readFile(Task &task)
 	responseTask.fd = task.client->fd;
 	this->_addTask(responseTask);
 	this->_markFDForRemoval(task.fd, this->_readable, READ);
-	std::cout << "done doing shit" << std::endl;
 }
 
 /*
@@ -486,16 +330,15 @@ void		WebServer::_readFile(Task &task)
  */
 void		WebServer::_writeFile(Task &task)
 {
-	std::cout << "het is tijd om te schrijven naar fd: " << task.fd << std::endl;
-	std::stringstream	conversionStream;
-	size_t				contentLength;
-	std::string			body = task.client->getRequest().getBody();
-	Task				responseTask;
+	std::stringstream			conversionStream;
+	size_t						contentLength;
+	std::vector<unsigned char>	&bodyVector = task.client->getRequest().getBody();
+	Task						responseTask;
+	char						*body = reinterpret_cast<char*>(&bodyVector[0]);
 
 	conversionStream << task.client->getRequest().getHeader("Content-Length");
 	conversionStream >> contentLength;
-	std::cout << "BODDUDUDUDUDDU: [" << body << "] with size: " << contentLength << std::endl;
-	write(task.fd, body.c_str(), contentLength);
+	write(task.fd, body, contentLength);
 	close(task.fd);
 	responseTask.type = Task::CLIENT_RESPONSE;
 	responseTask.client = task.client;
@@ -505,38 +348,39 @@ void		WebServer::_writeFile(Task &task)
 }
 
 /*
- *
+ * This function reads the output from the CGI.
  */
 void		WebServer::_readCGI(Task &task)
 {
-	std::cout << "super adrem cgi" << std::endl;
 	char		buffer[READBUFFERSIZE + 1];
 	int			bytesRead;
 	Task		responseTask;
+	CGI			*cgi;
 
+	cgi = task.cgi;
 	bzero(buffer, READBUFFERSIZE + 1);
 	bytesRead = read(task.fd, buffer, READBUFFERSIZE);
 	if (bytesRead < 0)
 	{
-		perror("stukker");
-		throw std::runtime_error("read error");
+		perror("read");
+		return ;
 	}
 	else if (bytesRead > 0)
 	{
-		task.cgi->setResponseBody(buffer);
+		cgi->setResponseBody(buffer);
 		return ;
 	}
 
 	size_t		lineStart = 0;
 	size_t		prevStart;
-	std::string	responseMessage = task.cgi->getResponseBody();
+	std::string	responseMessage = cgi->getResponseBody();
 	std::string	header, body;
 
 	// Process the headers.
 	while (true)
 	{
 		prevStart = lineStart;
-		header = this->_getString(&lineStart, responseMessage, "\r\n");
+		header = StringUtils::getString(&lineStart, responseMessage, "\r\n");
 		if (prevStart == lineStart || header == "")
 			break;
 		else
@@ -544,7 +388,7 @@ void		WebServer::_readCGI(Task &task)
 	}
 
 	// Put the remaining message into the body.
-	body = this->_getString(&lineStart, responseMessage, "\r\n\r\n");
+	body = StringUtils::getString(&lineStart, responseMessage, "\r\n\r\n");
 	task.client->getResponse().setBody(body);
 	close(task.fd);
 	responseTask.type = Task::CLIENT_RESPONSE;
@@ -552,7 +396,10 @@ void		WebServer::_readCGI(Task &task)
 	responseTask.fd = task.client->fd;
 	this->_addTask(responseTask);
 	this->_markFDForRemoval(task.fd, this->_readable, READ);
-	std::cout << "einde read cgi" << std::endl;
+
+	// We're done with the CGI, delete it.
+	task.cgi = 0;
+	delete cgi;
 }
 
 /*
@@ -560,14 +407,12 @@ void		WebServer::_readCGI(Task &task)
  */
 void		WebServer::_writeCGI(Task &task)
 {
-	std::cout << "super riterem cgi" << std::endl;
-	int				ret;
-	std::string		body = task.client->getRequest().getBody();
-	Task			newTask;
+	int							ret;
+	std::vector<unsigned char>	&bodyVector = task.client->getRequest().getBody();
+	char						*body = reinterpret_cast<char*>(&bodyVector[0]);
+	Task						newTask;
 
-	std::cout << ":::" << std::endl << body << std::endl << ":::" << std::endl;
-	ret = write(task.fd, body.c_str(), body.size());
-	std::cout << "Wrote " << ret << " characters to fd: " << task.fd << std::endl;
+	ret = write(task.fd, body, task.client->getRequest().getBodyLength());
 	close(task.fd);
 	newTask = task;
 	newTask.fd = task.cgi->fdout[0];
@@ -579,35 +424,54 @@ void		WebServer::_writeCGI(Task &task)
 /*
  * This function sends a response back to the client.
  */
-void		WebServer::_sendResponse(Task &task)
+bool		WebServer::_sendResponse(Task &task)
 {
-	std::cout << "sending respones :) " << std::endl;
-	int					statusCode;
-	int					ret;
-	std::string			responseString;
-	std::string			body;
-	std::stringstream	contentLength;
+	int							statusCode;
+	int							ret;
+	std::vector<unsigned char>	responseVector;
+	char						*responseChar;
+	std::string					body;
+	std::stringstream			contentLength;
+	size_t						bytesSent;
+	Client						*client = task.client;
+	Response					&response = client->getResponse();
 
-	Client	*client = task.client;
-	Response	&response = client->getResponse();
-	statusCode = response.getStatusCode();
-	if (response.isError() && response.isDefaultError() == true)
+	// Check if we need to build the response first.
+	if (response.isResponseBuilt() == false)
 	{
-		std::cout << "error code: " << statusCode << std::endl;
-		body = this->_defaultError;
-		_replaceDefaultErrorMessage(body, statusCode);
-		response.setBody(body);
+		statusCode = response.getStatusCode();
+		contentLength << "Content-Length: ";
+		if (response.isError() && response.isDefaultError() == true)
+		{
+			body = this->_defaultError;
+			_replaceDefaultErrorMessage(body, statusCode);
+			response.setBody(body);
+			contentLength << body.size();
+		}
+		else
+		{
+			std::vector<unsigned char>	tmp = response.getBody();
+			contentLength << tmp.size();
+		}
+		response.setHeader(contentLength.str());
+		response.buildResponseText(this->_responseStatus[response.getStatusCode()]);
 	}
-	else
-		body = response.getBody();
-	contentLength << "Content-Length: " << body.size();
-	response.setHeader(contentLength.str());
-	responseString = response.getResponseText(this->_responseStatus[response.getStatusCode()]);
-	//std::cout << "SENDING:" << std::endl << std::endl << responseString << std::endl << std::endl;
-	ret = send(client->fd, responseString.c_str(), responseString.size(), 0);
+
+	// Get the response text and try to send it.
+	responseVector = response.getResponseText();
+	bytesSent = response.getBytesSent();
+	responseChar = reinterpret_cast<char*>(&responseVector[bytesSent]);
+	ret = send(client->fd, responseChar, responseVector.size() - bytesSent, 0);
+	response.setBytesSent(ret);
+
+	// Check if the entire message was sent.
+	if (response.isSentEntirely() == false)
+		return false;
+
+	// We're done, reset the client and remove the task.
 	task.client->reset();
-	// error check?
 	this->_markFDForRemoval(task.fd, this->_writeable, WRITE);
+	return true;
 }
 
 /*
@@ -616,7 +480,6 @@ void		WebServer::_sendResponse(Task &task)
  */
 void		WebServer::_addTask(Task &task)
 {
-	std::cout << "Ik ben in mn nieuwe functie" << std::endl;
 	if (this->_getTaskIOType(task) == READ)
 	{
 		if (this->_isFDInRemovalSet(task.fd, this->_readFDToRemove) == true)
@@ -643,18 +506,10 @@ void		WebServer::_addTask(Task &task)
  */
 void		WebServer::_markFDForRemoval(int fd, fd_set &set, TaskIOType mode)
 {
-	std::cout << "Removing fd " << fd << " from the ";
 	if (mode == READ)
-	{
-		std::cout << "read";
 		this->_readFDToRemove.push_back(fd);
-	}
 	else
-	{
-		std::cout << "write";
 		this->_writeFDToRemove.push_back(fd);
-	}
-	std::cout << " set" << std::endl;
 
 	FD_CLR(fd, &set);
 }
@@ -664,7 +519,6 @@ void		WebServer::_markFDForRemoval(int fd, fd_set &set, TaskIOType mode)
  */
 void		WebServer::_replaceDefaultErrorMessage(std::string &body, int errorCode)
 {
-	std::cout << "Jemig de penig, we hebben echt een error hoor" << std::endl;
 	size_t				pos;
 	std::stringstream	errorCodeString;
 	std::string const	replaceCode = "ERROR_CODE";
@@ -722,10 +576,9 @@ void		WebServer::_removeTasksForClient(int clientFD)
 
 	for (it = this->_readTaskMap.begin(); it != this->_readTaskMap.end(); it++)
 	{
-		if (it->second.client->fd == clientFD)
+		if (it->second.type != Task::WAIT_FOR_CONNECTION && it->second.client->fd == clientFD)
 		{
-			if (it->second.type == Task::FILE_READ)
-				close(it->first);
+			close(it->first);
 			this->_markFDForRemoval(it->second.fd, this->_readable, READ);
 		}
 	}
@@ -733,7 +586,7 @@ void		WebServer::_removeTasksForClient(int clientFD)
 	{
 		if (it->second.client->fd == clientFD)
 		{
-			// close fd?
+			close(it->first);
 			this->_markFDForRemoval(it->second.fd, this->_writeable, WRITE);
 		}
 	}
@@ -756,37 +609,15 @@ bool		WebServer::_isFDInRemovalSet(int fd, std::vector<int> &removalVector)
 }
 
 /*
- * DEBUG
- *
- * print fd's that are set in a set. xD lmao
+ * This function gets the port from a socket.
  */
-void		WebServer::_debugPrintFDsInSet(fd_set &set, int max = 1024)
+int			WebServer::_getPortFromSocket(int fd)
 {
-	bool first = true;
-	std::cout << "The set fd's are [";
-	for (int i = 0; i < max; i++)
-	{
-		if (FD_ISSET(i, &set))
-		{
-			if (!first)
-				std::cout << " ";
-			else
-				first = false;
-			std::cout << i;
-		}
-	}
-	std::cout << "]" << std::endl;
-}
+	struct sockaddr_in	address;
+	int					addressSize = sizeof(struct sockaddr_in);
 
-/*
- * DEBUG
- *
- *
- * print fd type
- */
-void		WebServer::_debugCheckTaskFD(Task &task, std::string const &mode)
-{
-	std::cout << "Checking fd [" << task.fd << "] of type [";
-	task.printType();
-	std::cout << "] for " << mode << std::endl;
+	int ret = getsockname(fd, (struct sockaddr*)&address, (socklen_t*)&addressSize);
+	if (ret < 0)
+		perror("getsockname");
+	return (ntohs(address.sin_port));
 }

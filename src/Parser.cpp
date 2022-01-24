@@ -1,9 +1,9 @@
 #include "Parser.hpp"
 #include "StringUtils.hpp"
-#include <iostream>
 #include <string>
 #include <vector>
 #include <fstream>
+#include <sstream>
 
 Parser::~Parser(void)
 {
@@ -13,23 +13,10 @@ Parser::Parser(void)
 {
 }
 
-Parser::Parser(const Parser& src)
-{
-	*this = src;
-}
-
-Parser& Parser::operator=(const Parser& src)
-{
-	this->_filename = src._filename;
-	this->_filecontent = src._filecontent;
-	this->_serverConfigs = src._serverConfigs;
-	return (*this);
-}
 
 void	Parser::init(const std::string& configFile)
 {
-	this->_filename = configFile;
-	readConfigfile();
+	this->_filecontent = getFilecontent(configFile.c_str());
 	syntaxErrorCheck();
 	semicolonsErrorCheck();
 	createServerConfig();
@@ -37,28 +24,28 @@ void	Parser::init(const std::string& configFile)
 
 size_t	Parser::getAmountServers() const
 {
-	return (this->_serverConfigs.size());
+	return this->_serverConfigs.size();
 }
 
 const std::vector<ServerConfig>&	Parser::getServerConfigs() const
 {
-	return (this->_serverConfigs);
+	return this->_serverConfigs;
 }
 
 const ServerConfig&	Parser::getServerConfigs(size_t index) const
 {
-	return (this->_serverConfigs[index]);
+	return this->_serverConfigs[index];
 }
 
-void	Parser::readConfigfile()
+std::string Parser::getFilecontent(const char *filename)
 {
-	std::ifstream	ifs;
-
-	ifs.open(this->_filename.c_str());
-	if (!ifs)
-		throw std::runtime_error("input filestream open error");
-	getline(ifs, this->_filecontent, '\0');
-	ifs.close();
+	std::ifstream in(filename, std::ios::in);
+	if (!in)
+		throw std::runtime_error("Failed to open config file");
+	std::stringstream contents;
+	contents << in.rdbuf();
+	in.close();
+	return contents.str();
 }
 
 void	Parser::syntaxErrorCheck() const
@@ -86,7 +73,7 @@ static bool	isEndSemicolon(const std::string& str)
 	size_t pos = str.find_last_not_of(Whitespaces);
 	if (pos == std::string::npos)
 		return (false);
-	return (str[pos] == ';');
+	return str[pos] == ';';
 }
 
 void	Parser::semicolonsErrorCheck() const
@@ -121,9 +108,8 @@ void	Parser::semicolonsErrorCheck() const
 void	Parser::createServerConfig()
 {
 	const std::string			id = "server";
-	std::vector<std::string>	lines;
+	std::vector<std::string>	lines = StringUtils::splitServers(this->_filecontent);
 
-	StringUtils::splitServers(this->_filecontent, lines);
 	for (size_t i = 0; i < lines.size(); i++)
 	{
 		if (!lines[i].compare(0, id.size(), id))

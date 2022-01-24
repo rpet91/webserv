@@ -28,8 +28,6 @@ class Task
 		virtual ~Task();
 		Task			&operator=(Task const &src);
 
-		void			printType();
-	
 		// Parameterized constructor
 		Task(TaskType type, int fd, Server *server, Client *client);
 

@@ -33,15 +33,12 @@ class WebServer
 		int				_openSocket(int port);
 		void			_acceptConnection(int socketFD);
 		void			_readRequest(Client &client);
-		void			_processRequest(Client &client, std::string requestMessage);
 		void			_findServerForRequest(Client &client);
-		std::string		_getString(size_t *startPosition,
-							std::string const &source, std::string const &delimiter);
 		void			_readFile(Task &task);
 		void			_writeFile(Task &task);
 		void			_readCGI(Task &task);
 		void			_writeCGI(Task &task);
-		void			_sendResponse(Task &task);
+		bool			_sendResponse(Task &task);
 		void			_addTask(Task &task);
 		void			_markFDForRemoval(int fd, fd_set &set, TaskIOType mode);
 		void			_replaceDefaultErrorMessage(std::string &body, int errorCode);
@@ -49,9 +46,7 @@ class WebServer
 		TaskIOType		_getTaskIOType(Task &task);
 		void			_removeTasksForClient(int clientFD);
 		bool			_isFDInRemovalSet(int fd, std::vector<int> &removalVector);
-// DEBUG
-		void			_debugPrintFDsInSet(fd_set &set, int max);
-		void			_debugCheckTaskFD(Task &task, std::string const &mode);
+		int				_getPortFromSocket(int fd);
 
 		std::vector<int>					_sockets;
 		std::map<int, std::vector<Server> >	_servers;

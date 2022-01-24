@@ -7,7 +7,7 @@
 <body>
 	<h3>&copy; Spinnenwebservetjes' official form</h3>
 	
-	<form method="get" action="submission.php">
+	<form method="post" action="submission.php">
 
 		<label for="name">Your name</label>
 		<div>
@@ -26,14 +26,14 @@
 
     </form>
 	<br>
-	<form enctype="multipart/form-data" method="post" action="file.php">
+	<form enctype="multipart/form-data" method="post" action="upload.php">
 
 		<label for="file">Upload an image</label>
 		<div>
-			<input type="file" id="image" name="image" accept="image/png, image/jpeg">
+			<input type="file" id="imageupload" name="imageupload" />
 		</div>
 		<div>
-			<input type="submit" value="Upload file" />
+			<input type="submit" name="submit" value="Upload image" />
 		</div>
 
 	</form>

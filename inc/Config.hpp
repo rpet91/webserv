@@ -5,13 +5,6 @@
 #include <vector>
 #include <map>
 
-enum	e_httpMethods
-{
-	GET,
-	POST,
-	DELETE
-};
-
 class Config
 {
 	public:
@@ -20,6 +13,13 @@ class Config
 		Config();
 		Config(const Config&);
 		Config&	operator=(const Config&);
+
+		enum	e_httpMethods
+		{
+			GET,
+			POST,
+			DELETE
+		};
 
 		//get()
 		size_t  									getLimitClientBodySize() const;
@@ -57,16 +57,18 @@ class Config
 		std::string							_root;
 		std::vector<std::string>			_index;
 		bool								_autoindex;
-		std::map<size_t, std::string>		_errorPage;
 		bool								_httpMethods[3];
+		size_t								_amountCGI;
 		std::map<std::string, std::string>	_CGI;
 		std::string							_uploadDir;
 		size_t								_amountErrorpages;
-		size_t								_amountCGI;
+		std::map<size_t, std::string>		_errorPage;
 		std::string							_redirection;
 
 	private:
 		const std::string*	lookUpCGI(const std::string& string) const;
 };
+
+std::ostream&	operator<<(std::ostream& out, const Config& con);
 
 #endif

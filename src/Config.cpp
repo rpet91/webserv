@@ -3,17 +3,14 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <iostream>
 #include <sstream>
 
 Config::~Config()
 {
-	// std::cout << "Destructor called (Config)" << std::endl;
 }
 
 Config::Config() : _limitClientBodySize(0)
 {
-	// std::cout << "Constructor called (Config)" << std::endl;
 	_httpMethods[GET] = false;
 	_httpMethods[POST] = false;
 	_httpMethods[DELETE] = false;
@@ -22,7 +19,6 @@ Config::Config() : _limitClientBodySize(0)
 
 Config::Config(const Config& src)
 {
-	// std::cout << "Copy Constructor called (Config)" << std::endl;
 	*this = src;
 }
 
@@ -32,61 +28,61 @@ Config&	Config::operator=(const Config& src)
 	this->_root = src.getRoot();
 	this->_index = src.getIndex();
 	this->_autoindex = src.getAutoindex();
-	this->_errorPage = src.getMapErrorPages();
 	this->_httpMethods[GET] = src.getHttpMethods(GET);
 	this->_httpMethods[POST] = src.getHttpMethods(POST);
-	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);;
+	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);
+	this->_amountCGI = src.getAmountCGI();
 	this->_CGI = src.getMapCGI();
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
-	this->_amountCGI = src.getAmountCGI();
+	this->_errorPage = src.getMapErrorPages();
 	this->_redirection = src.getRedirection();
-	return (*this);
+	return *this;
 }
 
 size_t  Config::getLimitClientBodySize() const
 {
-	return (this->_limitClientBodySize);
+	return this->_limitClientBodySize;
 }
 
 const std::string&	Config::getRoot() const
 {
-	return (this->_root);
+	return this->_root;
 }
 
 const std::vector<std::string>&	    Config::getIndex() const
 {
-	return (this->_index);
+	return this->_index;
 }
 
 bool    Config::getAutoindex() const
 {
-	return (this->_autoindex);
+	return this->_autoindex;
 }
 
 bool	Config::isValidHttpMethod(const std::string& method) const
 {
 	if (method == "GET")
-		return (this->_httpMethods[GET]);
+		return this->_httpMethods[GET];
 	if (method == "POST")
-		return (this->_httpMethods[POST]);
+		return this->_httpMethods[POST];
 	if (method == "DELETE")
-		return (this->_httpMethods[DELETE]);
-	return (false);
+		return this->_httpMethods[DELETE];
+	return false;
 }
 
 const std::string&	Config::getErrorPage(size_t errorNumber) const
 {
 	std::map<size_t, std::string>::const_iterator	it = this->_errorPage.find(errorNumber);
-	return (it->second);
+	return it->second;
 }
 
 bool	Config::hasErrorPage(size_t errorNumber) const
 {
 	std::map<size_t, std::string>::const_iterator	it = this->_errorPage.find(errorNumber);
 	if (it == this->_errorPage.end())
-		return (false);
-	return (true);
+		return false;
+	return true;
 }
 
 const std::string*	Config::lookUpCGI(const std::string& string) const
@@ -106,58 +102,58 @@ const std::string*	Config::lookUpCGI(const std::string& string) const
 		size_t	start = string.length() - len;
 		std::string substr = string.substr(start, len);
 		if (substr == tmp)
-			return (&it->second);
+			return &it->second;
 		it++;
 	}
-	return (NULL);
+	return nullptr;
 }
 
 bool	Config::hasCGI(const std::string& string) const
 {
-	return (lookUpCGI(string));
+	return lookUpCGI(string);
 }
 
 const std::string	Config::getCGI(const std::string& string) const
 {
 	const std::string*	ptr = lookUpCGI(string);
 	if (ptr)
-		return (*ptr);
-	return ("");
+		return *ptr;
+	return "";
 }
 
 bool	Config::hasUploadDir() const
 {
-	return (this->_uploadDir != "");
+	return this->_uploadDir != "";
 }
 
 const std::string&  Config::getUploadDir() const
 {
-	return (this->_uploadDir);
+	return this->_uploadDir;
 }
 
 size_t	Config::getAmountErrorPages() const
 {
-	return (this->_amountErrorpages);
+	return this->_amountErrorpages;
 }
 
 size_t	Config::getAmountCGI() const
 {
-	return (this->_amountCGI);
+	return this->_amountCGI;
 }
 
 const std::map<size_t, std::string>&	Config::getMapErrorPages() const
 {
-	return (this->_errorPage);
+	return this->_errorPage;
 }
 
 const std::map<std::string, std::string>&	Config::getMapCGI() const
 {
-	return (this->_CGI);
+	return this->_CGI;
 }
 
 bool	Config::getHttpMethods(enum	e_httpMethods method) const
 {
-	return (this->_httpMethods[method]);
+	return this->_httpMethods[method];
 }
 
 void	Config::setLimitClientBodySize(const std::string& str)
@@ -270,7 +266,6 @@ void	Config::setCGI(const std::string& str)
 	StringUtils::split(str, Whitespaces, vec);
 	if (vec.size() != 3)
 		throw std::runtime_error("configfile: CGI bad formatting");
-	// this->_CGI.insert(std::pair<std::string, std::string>(vec[1], vec[2]));
 	this->_CGI[vec[1]] = vec[2];
 }
 
@@ -295,18 +290,17 @@ void	Config::setErrorPage(const std::string& str)
 		throw std::runtime_error("configfile: bad formatting errorpage");
 	ss << vec[1];
 	ss >> errorNum;
-	// this->_errorPage.insert(std::pair<size_t, std::string>(errorNum, vec[2]));
 	this->_errorPage[errorNum] = vec[2];
 }
 
 bool	Config::isRedirection() const
 {
-	return (this->_redirection != "");
+	return this->_redirection != "";
 }
 
 const std::string&	Config::getRedirection() const
 {
-	return (this->_redirection);
+	return this->_redirection;
 }
 
 void	Config::setRedirection(const std::string& str)
@@ -319,4 +313,22 @@ void	Config::setRedirection(const std::string& str)
 	if (vec[1] != "301")
 		throw std::runtime_error("configfile: redirection code must be 301");
 	this->_redirection = vec[2];
+}
+
+std::ostream&	operator<<(std::ostream& out, const Config& con)
+{
+	out << "BodySize: " << con.getLimitClientBodySize() << std::endl;
+	out << "Root    : " << con.getRoot() << std::endl;
+	out << "indexVec: "; for (size_t i = 0; i < con.getIndex().size(); i++){out << con.getIndex()[i] << " ";} out << std::endl;
+	out << "autoindx: " << con.getAutoindex() << std::endl;
+	out << "Errorpgs:\n"; for (std::map<size_t, std::string>::const_iterator it = con.getMapErrorPages().begin(); it != con.getMapErrorPages().end(); it++){out << "\t\terr: " << it->first << " " << it->second << std::endl;}
+	out << "httpGET : " << con.getHttpMethods(Config::GET) << std::endl;
+	out << "httpPOST: " << con.getHttpMethods(Config::POST) << std::endl;
+	out << "httpDEL : " << con.getHttpMethods(Config::DELETE) << std::endl;
+	out << "CGI all :\n"; for (std::map<std::string, std::string>::const_iterator it = con.getMapCGI().begin(); it != con.getMapCGI().end(); it++){out << "\t\tcgi: " << it->first << " " << it->second << std::endl;}
+	out << "Upld Dir: " << con.getUploadDir() << std::endl;
+	out << "AmntErrs: " << con.getAmountErrorPages() << std::endl;
+	out << "AmntCGIs: " << con.getAmountCGI() << std::endl; 
+	out << "Redir   : " << con.getRedirection() << std::endl;
+	return out;
 }

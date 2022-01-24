@@ -1,51 +1,79 @@
 #include "ServerConfig.hpp"
 #include "Config.hpp"
 #include "StringUtils.hpp"
-#include <iostream>
 #include <sstream>
 #include <map>
 #include <vector>
 
-ServerConfig::~ServerConfig()
+typedef void (ServerConfig::*setFunction)(const std::string&);
+
+static std::map<std::string, setFunction>	initFunctionPointers()
 {
-	// std::cout << "Destructor called (ServerConfig)" << std::endl;
+	std::map<std::string, setFunction>	functionPointerMap;
+	functionPointerMap["location"] = &ServerConfig::setLocationConfig;
+	functionPointerMap["listen"] = &ServerConfig::setPort;
+	functionPointerMap["server_name"] = &ServerConfig::setServerName;
+
+	functionPointerMap["client_max_body_size"] = &ServerConfig::setLimitClientBodySize;
+	functionPointerMap["root"] = &ServerConfig::setRoot;
+	functionPointerMap["index"] = &ServerConfig::setIndex;
+	functionPointerMap["autoindex"] = &ServerConfig::setAutoindex;
+	functionPointerMap["limit_except"] = &ServerConfig::setHttpMethods;
+	functionPointerMap["cgi"] = &ServerConfig::setCGI;
+	functionPointerMap["upload"] = &ServerConfig::setUploadDir;
+	functionPointerMap["error_page"] = &ServerConfig::setErrorPage;
+	functionPointerMap["return"] = &ServerConfig::setRedirection;
+	return functionPointerMap;
 }
 
-ServerConfig::ServerConfig()
+std::map<std::string, setFunction>	functionPointers = initFunctionPointers();
+
+
+ServerConfig::~ServerConfig()
 {
-	// std::cout << "Constructor called (ServerConfig)" << std::endl;
+}
+
+ServerConfig::ServerConfig() : Config::Config()
+{
 }
 
 ServerConfig::ServerConfig(ServerConfig const& src) : Config::Config(src)
 {
-	// std::cout << "Copy Constructor called (ServerConfig)" << std::endl;
 	*this = src;
 }
 
 ServerConfig& ServerConfig::operator=(const ServerConfig& src)
 {
-	//	ServerConfig variables
 	this->_amountLocations = src.getAmountLocations();
 	this->_defaultServerName = src.getDefaultServerName();
 	this->_portNumber = src.getPort();
 	this->_serverNames = src.getServerNames();
 	this->_locations = src._locations;
-
-	//	Config variables
 	this->_limitClientBodySize = src.getLimitClientBodySize();
 	this->_root = src.getRoot();
 	this->_index = src.getIndex();
 	this->_autoindex = src.getAutoindex();
-	this->_errorPage = src.getMapErrorPages();
 	this->_httpMethods[GET] = src.getHttpMethods(GET);
 	this->_httpMethods[POST] = src.getHttpMethods(POST);
 	this->_httpMethods[DELETE] = src.getHttpMethods(DELETE);
+	this->_amountCGI = src.getAmountCGI();
 	this->_CGI = src.getMapCGI();
 	this->_uploadDir = src.getUploadDir();
 	this->_amountErrorpages = src.getAmountErrorPages();
-	this->_amountCGI = src.getAmountCGI();
+	this->_errorPage = src.getMapErrorPages();
 	this->_redirection = src.getRedirection();
-	return (*this);
+	return *this;
+}
+
+void	ServerConfig::call(const std::string& identifier, const std::string& argument)
+{
+	setFunction function = functionPointers[identifier];
+	if (function == nullptr)
+	{
+		std::cerr << "id: " << identifier << std::endl;
+		throw std::runtime_error("configfile: unknown identifier");
+	}
+	(this->*function)(argument);
 }
 
 void	ServerConfig::init(std::string& str)
@@ -61,40 +89,7 @@ void	ServerConfig::init(std::string& str)
 		StringUtils::lowerCase(identifier);
 		if (!identifier.length())
 			continue;
-		if (identifier == "location")
-			continue;
-		else if (identifier == "listen")
-			this->setPort(lines[i]);
-		else if (identifier == "server_name")
-			this->setServerName(lines[i]);
-		else if (identifier == "root")
-			this->setRoot(lines[i]);
-		else if (identifier == "error_page")
-			this->setErrorPage(lines[i]);
-		else if (identifier == "client_max_body_size")
-			this->setLimitClientBodySize(lines[i]);
-		else if (identifier == "index")
-			this->setIndex(lines[i]);
-		else if (identifier == "autoindex")
-			this->setAutoindex(lines[i]);
-		else if (identifier == "limit_except")
-			this->setHttpMethods(lines[i]);
-		else if (identifier == "cgi")
-			this->setCGI(lines[i]);
-		else if (identifier == "upload")
-			this->setUploadDir(lines[i]);
-		else if (identifier == "return")
-			this->setRedirection(lines[i]);
-		else
-			throw std::runtime_error("configfile: unknown identifier");
-	}
-	for (size_t i = 0; i < lines.size(); i++)
-	{
-		StringUtils::matchIdentifier(lines[i], identifier);
-		if (identifier == "location")
-		{
-			this->setLocationConfig(lines[i]);
-		}
+		this->call(identifier, lines[i]);
 	}
 	this->setDefaultServerName();
 	this->_amountLocations = _locations.size();
@@ -104,7 +99,7 @@ void	ServerConfig::init(std::string& str)
 
 void	ServerConfig::setDefaultServerName()
 {
-	if (getServerNames().size() == 0)	//deze moet nooit throwen
+	if (getServerNames().size() == 0)
 		throw std::runtime_error("configfile: no default servername found");
 	this->_defaultServerName = getServerNames()[0];
 }
@@ -157,17 +152,17 @@ void	ServerConfig::setLocationConfig(const std::string& str)
 
 const std::string&	ServerConfig::getDefaultServerName() const
 {
-	return (this->_defaultServerName);
+	return this->_defaultServerName;
 }
 
 const std::vector<size_t>&	ServerConfig::getPort() const
 {
-	return (this->_portNumber);
+	return this->_portNumber;
 }
 
 const std::vector<std::string>&	ServerConfig::getServerNames() const
 {
-	return (this->_serverNames);
+	return this->_serverNames;
 }
 
 static size_t	getMatchLength(const std::string& URI, const std::string& locationPath)
@@ -175,21 +170,21 @@ static size_t	getMatchLength(const std::string& URI, const std::string& location
 	size_t	matchLength = 0;
 
 	if (locationPath.size() > URI.size())
-		return (0);
+		return 0;
 	for (size_t i = 0; i < locationPath.size(); i++)
 	{
 		if (locationPath[i] != URI[i])
-			return (0);
+			return 0;
 		matchLength++;
 	}
-	return (matchLength);
+	return matchLength;
 }
 
 const LocationConfig*	ServerConfig::getLocationConfig(const std::string& path) const
 {
 	std::map<std::string, LocationConfig>::const_iterator	it = this->_locations.begin();
 	const std::map<std::string, LocationConfig>::const_iterator	itend = this->_locations.end();
-	const LocationConfig	*bestMatch = NULL;
+	const LocationConfig	*bestMatch = nullptr;
 	size_t					bestMatchLength = 0;
 
 	while (it != itend)
@@ -199,36 +194,26 @@ const LocationConfig*	ServerConfig::getLocationConfig(const std::string& path) c
 			bestMatch = &it->second;
 		it++;
 	}
-	return (bestMatch);
+	return bestMatch;
 }
 
 size_t	ServerConfig::getAmountLocations() const
 {
-	return (this->_amountLocations);
+	return this->_amountLocations;
 }
 
-std::ostream &operator<<(std::ostream& out, const ServerConfig& loc)
+const std::map<std::string, LocationConfig>& ServerConfig::getMapLocations() const
 {
-	std::cout << "Printing ServerConfig:" << std::endl;
-	out << "AmntLocs: " << loc.getAmountLocations() << std::endl;
-	out << "DfServer: " << loc.getDefaultServerName() << std::endl;
-	out << "Port nrs: "; for (size_t i = 0; i < loc.getPort().size(); i++){out << loc.getPort()[i] << " ";} out << std::endl;
-	out << "ServNmes: "; for (size_t i = 0; i < loc.getServerNames().size(); i++){out << loc.getServerNames()[i] << " ";} out << std::endl;
+	return this->_locations;
+}
 
-	out << "BodySize: " << loc.getLimitClientBodySize() << std::endl;
-	out << "LocaRoot: " << loc.getRoot() << std::endl;
-	out << "indexVec: "; for (size_t i = 0; i < loc.getIndex().size(); i++){out << loc.getIndex()[i] << " ";} out << std::endl;
-	out << "Autoindx: " << loc.getAutoindex() << std::endl;
-
-	out << "httpGET : " << loc.getHttpMethods(GET) << std::endl;
-	out << "httpPOST: " << loc.getHttpMethods(POST) << std::endl;
-	out << "httpDEL : " << loc.getHttpMethods(DELETE) << std::endl;
-
-	out << "Upld Dir: " << loc.getUploadDir() << std::endl;
-	out << "Redir   : " << loc.getRedirection() << std::endl;
-	out << "AmntErrs: " << loc.getAmountErrorPages() << std::endl;
-	out << "AmntCGIs: " << loc.getAmountCGI() << std::endl;
-	out << "CGI all :\n"; for (std::map<std::string, std::string>::const_iterator it = loc.getMapCGI().begin(); it != loc.getMapCGI().end(); it++){out << "\tcgi ext: " << it->first << " " << it->second << std::endl;}
-	out << "Errorpgs:\n"; for (std::map<size_t, std::string>::const_iterator it = loc.getMapErrorPages().begin(); it != loc.getMapErrorPages().end(); it++){out << "\terr num: " << it->first << " " << it->second << std::endl;}
-	return (out);
+std::ostream&	operator<<(std::ostream& out, const ServerConfig& server)
+{
+	out << "Dfltname: " << server.getDefaultServerName() << std::endl;
+	out << "AmntLocs: " << server.getAmountLocations() << std::endl;
+	out << "Port nrs: "; for (size_t i = 0; i < server.getPort().size(); i++){out << server.getPort()[i] << " ";} out << std::endl;
+	out << "ServNmes: "; for (size_t i = 0; i < server.getServerNames().size(); i++){out << server.getServerNames()[i] << " ";} out << std::endl;
+	out << "location:\n"; for (std::map<std::string, LocationConfig>::const_iterator it = server.getMapLocations().begin(); it != server.getMapLocations().end(); it++){out << "\t\tloc: " << it->first << std::endl;}
+	out << static_cast<Config>(server);
+	return out;
 }

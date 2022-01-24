@@ -4,8 +4,9 @@
 #include "Config.hpp"
 #include <string>
 #include <iostream>
+#include <map>
 
-class ServerConfig;
+class	ServerConfig;
 
 class	LocationConfig : public Config
 {
@@ -24,13 +25,14 @@ class	LocationConfig : public Config
 		const std::string&	getPath() const;
 
 		//set()
-		void				setPath(const std::string&);
+		void	setPath(const std::string&);
 
 	private:
 		std::string	_path;
 
+		void	call(const std::string&, const std::string&);
 };
 
-std::ostream &operator<<(std::ostream& out, LocationConfig const& loc);
+std::ostream&	operator<<(std::ostream& out, LocationConfig const& loc);
 
 #endif

@@ -16,8 +16,6 @@
 #include <dirent.h>				// opendir
 #include <sys/errno.h>			// errno
 
-#include <iostream>		// DEBUG
-
 /*
  * Copy constructor
  */
@@ -119,14 +117,12 @@ void		Server::handleConnection(Task &task)
 			return ;
 		}
 	}
-	std::cout << "uiteindelijke pathname: " << pathName << std::endl;
 	if (method == "DELETE")
 		return this->_deleteFile(task, pathName);
 
 	bool	get = (method == "GET");
 	if (this->_config.hasCGI(URI) == true)
 	{
-		std::cout << "We have a CGI for: " << URI << std::endl;
 		std::string		CGIPath = this->_config.getCGI(URI);
 		this->_launchCGI(task, CGIPath);
 		if (task.client->getResponse().isError())
@@ -144,23 +140,16 @@ void		Server::handleConnection(Task &task)
 				task.fd = task.cgi->fdin[1];
 			}
 		}
-		std::cout << "fd na cgi dingen: " << task.fd << std::endl;
 	}
 	else
 	{
-		std::cout << "We DO NOT have a CGI for: " << URI << std::endl;
 		if (get == true)
 			task.type = Task::FILE_READ;
 		else
 		{
-			if (location->hasUploadDir() == false)
-			{
-				std::cout << "we hebben geen uploaddir in de config" << std::endl;
-				return this->_setPageNotFoundError(task); // 404? Is dit de goeie error?
-			}
-			task.type = Task::FILE_WRITE;
-			pathName = location->getUploadDir() + URI;
-			std::cout << "upload pathname: " << pathName << std::endl;
+			task.client->getResponse().setStatusCode(405);
+			this->_checkErrorPath(task);
+			return ;
 		}
 		task.fd = this->_openFile(task, pathName);
 		if (task.fd < 0)
@@ -177,10 +166,8 @@ int			Server::_openFile(Task &task, std::string &pathName)
 	Response		&response = task.client->getResponse();
 	int				fd = 0;
 
-	std::cout << "PATHNAME: " << pathName << std::endl;
 	if (clientRequest != "POST" && this->_pathType(pathName) != DOCUMENT)
 	{
-		std::cout << "404 error incoming baybeee" << std::endl;
 		response.setStatusCode(404);
 		return -1;
 	}
@@ -191,23 +178,19 @@ int			Server::_openFile(Task &task, std::string &pathName)
 	}
 	else if (clientRequest == "POST")
 	{
-		if (this->_isValidContentLength(task) < 0)
+		response.setStatusCode(201);
+		if (this->_isValidContentLength(task) == false)
 			return -1;
 		if ((fd = open(pathName.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644)) < 0)
-		{
-			perror("ja kka");
 			response.setStatusCode(403);
-		}
-		response.setStatusCode(201);
 	}
 	else if (clientRequest == "OTHER")
 	{
-		std::cout << "error 405 is nu echt nodig" << std::endl;
 		response.setStatusCode(405);
 		return -1;
 	}
-	if (fd > 0 && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
-		throw std::runtime_error("Ja kak weer een error");
+	if (fd > 0)
+		fcntl(fd, F_SETFL, O_NONBLOCK);
 	return fd;
 }
 
@@ -228,15 +211,12 @@ void		Server::_checkErrorPath(Task &task)
 	else
 		hasErrorPage = false;
 
-	std::cout << "ERROR HANDELEN" << std::endl;
 	task.fd = 0;
 	task.client->getRequest().setMethod("GET");
 	if (hasErrorPage == true)
 	{
 		task.type = Task::FILE_READ;
-		std::cout << "De error page van code: " << errorCode << " bestaat!" << std::endl;
 		errorConfigPath = this->_config.getLocationConfig(URI)->getErrorPage(errorCode);
-		std::cout << "ERROR CONFIG PATH: " << errorConfigPath << std::endl;
 		task.fd = this->_openFile(task, errorConfigPath);
 		if (task.fd == -1)
 			hasErrorPage = false;
@@ -246,7 +226,6 @@ void		Server::_checkErrorPath(Task &task)
 		task.type = Task::CLIENT_RESPONSE;
 		task.fd = task.client->fd;
 		task.client->getResponse().setDefaultError();
-		std::cout << "DEFAULT ERROR STAAT AAN" << std::endl;
 	}
 }
 
@@ -266,29 +245,32 @@ Server::PathType	Server::_pathType(std::string const &path)
 }
 
 /*
- *	This function checks if the given content length overrides the max content body size
+ *	This function checks if the given content length is valid.
  */
-int			Server::_isValidContentLength(Task &task)
+bool		Server::_isValidContentLength(Task &task)
 {
+	if (task.client->getRequest().isChunked() == true)
+		return true;
+
 	size_t					givenContentLength;
 	std::stringstream		conversionStream;
 	Request					&request = task.client->getRequest();
-	std::string				URI = task.client->getRequest().getURI();
+	std::string				URI = request.getURI();
 	LocationConfig const	*location = this->_config.getLocationConfig(URI);
 	
 	conversionStream << request.getHeader("Content-Length");
 	conversionStream >> givenContentLength;
-	if (task.client->getRequest().getBodyLength() != givenContentLength)
+	if (request.getBodyLength() != givenContentLength)
 	{
 		task.client->getResponse().setStatusCode(400);
-		return -1;
+		return false;
 	}
 	else if (location->getLimitClientBodySize() < givenContentLength)
 	{
 		task.client->getResponse().setStatusCode(413);
-		return -1;
+		return false;
 	}
-	return 0;
+	return true;
 }
 
 /*
@@ -338,11 +320,8 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 	bool		post = (task.client->getRequest().getMethod() == "POST") ? true : false;
 
 	// Checks if the content length doesn't override the accepted limit.
-	if (post && this->_isValidContentLength(task) < 0)
-	{
-		std::cout << "CGI content length is invalid " << std::endl;
+	if (post && this->_isValidContentLength(task) == false)
 		return ;
-	}
 	// Checks if the path to CGI executable is valid.
 	if (this->_pathType(CGIPath) != DOCUMENT)
 	{
@@ -391,9 +370,7 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
 			close(cgi->fdin[0]);
 		}
 		char	*execArgs[2] = {const_cast<char*>(CGIPath.c_str()), NULL};
-		std::cerr << "boeiend" << std::endl;
 		execv(CGIPath.c_str(), execArgs);
-		std::cerr << "Couldn't find the CGI executable." << std::endl;
 		exit(EXIT_FAILURE);
 	}
 	close(cgi->fdout[1]);
@@ -407,7 +384,6 @@ void		Server::_launchCGI(Task &task, std::string const &CGIPath)
  */
 void	Server::_setEnvironmentVars(Task &task)
 {
-	std::cout << "CGI vars zetten in child process" << std::endl;
 	Request					request = task.client->getRequest();
 	std::string				URI = task.client->getRequest().getURI();
 	LocationConfig const	*location = this->_config.getLocationConfig(URI);
@@ -415,7 +391,7 @@ void	Server::_setEnvironmentVars(Task &task)
 	std::string				cwd = std::string(getcwd(0, 0)) + '/';
 
 	this->_trySetVar("CONTENT_TYPE", request.getHeader("Content-Type"));
-	this->_trySetVar("CONTENT_LENGTH", request.getHeader("Content-Length"));
+	this->_trySetVar("CONTENT_LENGTH", request.getBodyLengthString().c_str());
 	this->_trySetVar("GATEWAY_INTERFACE", "CGI/1.1");
 	this->_trySetVar("HTTP_ACCEPT", request.getHeader("Accept"));
 	this->_trySetVar("HTTP_ACCEPT_CHARSET", request.getHeader("Accept-Charset"));
@@ -477,21 +453,18 @@ int		Server::_checkForInitialErrors(Task &task)
 	// Checks if we got a valid location block. If not, we send an 404 error.
 	else if (!location)
 	{
-		std::cout << "geen geldige location block gevonden" << std::endl;
 		clientResponse.setStatusCode(404);
 		return 1;
 	}
 	// Checks if the request of the client is accepted by the config file.
 	else if (location->isValidHttpMethod(method) == false)
 	{
-		std::cout << "invalid method" << std::endl;
 		clientResponse.setStatusCode(405);
 		return 1; 
 	}
 	// Checks if the request of the client has a valid URI.
 	else if (protocol != "HTTP/1.1" || URI.find("/../") != std::string::npos)
 	{
-		std::cout << "alles naar de tering en geef 400 error" << std::endl;
 		clientResponse.setStatusCode(400);
 		return 1;
 	}
@@ -503,7 +476,6 @@ int		Server::_checkForInitialErrors(Task &task)
  */
 void	Server::_deleteFile(Task &task, std::string const &path)
 {
-	std::cout << "tijd om iets te duhlietun." << std::endl;
 	if (remove(path.c_str()) < 0)
 	{
 		if (errno == EACCES)

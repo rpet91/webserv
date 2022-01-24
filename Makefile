@@ -46,14 +46,8 @@ test: all
 	clear
 	./$(NAME)
 
-post: all
-	./$(NAME) config/posttest_config.conf
+chunk:
+	curl -X POST -H "Transfer-Encoding: chunked" -H Expect: -F 'file=@inc/Parser.hpp' localhost:8000/post/upload2.php
 
-delete: all
-	./$(NAME) config/deletetest_config.conf
-
-redirect: all
-	./$(NAME) config/redirecttest_config.conf
-
-autoindex: all
-	./$(NAME) config/autoindextest_config.conf
+upload:
+	curl -X POST -H Expect: -F 'file=@inc/Parser.hpp' localhost:8000/post/upload2.php

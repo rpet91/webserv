@@ -8,27 +8,22 @@
 class Parser
 {
 	public:
-		//constructors()
 		virtual ~Parser();
 		Parser();
-		Parser(const Parser&);
-		Parser& operator=(const Parser&);
-		void	init(const std::string&);
 
-		//get()
+		void								init(const std::string&);
 		size_t								getAmountServers() const;
 		const std::vector<ServerConfig>&	getServerConfigs() const;
 		const ServerConfig&					getServerConfigs(size_t index) const;
 	
 	private:
-		std::string					_filename;
 		std::string					_filecontent;
 		std::vector<ServerConfig>	_serverConfigs;
 
-		void	readConfigfile();
-		void	syntaxErrorCheck() const;
-		void	semicolonsErrorCheck() const;
-		void	createServerConfig();
+		std::string	getFilecontent(const char *filename);
+		void		syntaxErrorCheck() const;
+		void		semicolonsErrorCheck() const;
+		void		createServerConfig();
 };
 
 #endif

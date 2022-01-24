@@ -1,7 +1,8 @@
 #include "Parser.hpp"				// Parser
 #include "WebServer.hpp"			// WebServer
-#include <iostream>					// std::cout, std::cerr
+#include <iostream>					// std::cerr
 #include <sys/select.h>				// select
+#include <cstdlib>					// EXIT_FAILURE
 
 int		main(int argc, char **argv)
 {
@@ -15,7 +16,7 @@ int		main(int argc, char **argv)
 		configFile = argv[1];
 	else
 	{
-		std::cout << "Too many arguments" << std::endl;
+		std::cerr << "Too many arguments" << std::endl;
 		return EXIT_FAILURE;
 	}
 	try
@@ -26,7 +27,6 @@ int		main(int argc, char **argv)
 	}
 	catch (std::exception &e)
 	{
-		std::cout << "main error" << std::endl;
 		std::cerr << "Error: " << e.what() << std::endl;
 	}
 }
