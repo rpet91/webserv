@@ -15,6 +15,7 @@
 #include <sstream>				// std::stringstream
 #include <dirent.h>				// opendir
 #include <sys/errno.h>			// errno
+#include <cstdio>				// remove
 
 /*
  * Copy constructor

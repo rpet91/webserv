@@ -1,9 +1,10 @@
-#include "Config.hpp"
-#include "StringUtils.hpp"
-#include <string>
-#include <vector>
-#include <map>
-#include <sstream>
+#include "Config.hpp"				// Config
+#include "StringUtils.hpp"			// StringUtils
+#include <string>					// std::string
+#include <vector>					// std::vector
+#include <map>						// std::map
+#include <sstream>					// std::stringstream
+#include <stdexcept>				// std::runtime_error
 
 Config::~Config()
 {
@@ -105,7 +106,7 @@ const std::string*	Config::lookUpCGI(const std::string& string) const
 			return &it->second;
 		it++;
 	}
-	return nullptr;
+	return NULL;
 }
 
 bool	Config::hasCGI(const std::string& string) const

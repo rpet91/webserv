@@ -1,9 +1,10 @@
-#include "ServerConfig.hpp"
-#include "Config.hpp"
-#include "StringUtils.hpp"
-#include <sstream>
-#include <map>
-#include <vector>
+#include "ServerConfig.hpp"			// ServerConfig
+#include "Config.hpp"				// Config
+#include "StringUtils.hpp"			// StringUtils
+#include <sstream>					// std::stringstream
+#include <map>						// std::map
+#include <vector>					// std::vector
+#include <stdexcept>				// std::runtime_error
 
 typedef void (ServerConfig::*setFunction)(const std::string&);
 
@@ -68,7 +69,7 @@ ServerConfig& ServerConfig::operator=(const ServerConfig& src)
 void	ServerConfig::call(const std::string& identifier, const std::string& argument)
 {
 	setFunction function = functionPointers[identifier];
-	if (function == nullptr)
+	if (function == NULL)
 	{
 		std::cerr << "id: " << identifier << std::endl;
 		throw std::runtime_error("configfile: unknown identifier");
@@ -184,7 +185,7 @@ const LocationConfig*	ServerConfig::getLocationConfig(const std::string& path) c
 {
 	std::map<std::string, LocationConfig>::const_iterator	it = this->_locations.begin();
 	const std::map<std::string, LocationConfig>::const_iterator	itend = this->_locations.end();
-	const LocationConfig	*bestMatch = nullptr;
+	const LocationConfig	*bestMatch = NULL;
 	size_t					bestMatchLength = 0;
 
 	while (it != itend)

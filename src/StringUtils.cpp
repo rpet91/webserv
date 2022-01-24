@@ -1,7 +1,7 @@
-#include "StringUtils.hpp"		// StringUtils
-#include <string>				// std::string
-#include <vector>				// std::vector
-#include <stdexcept>			// std::runtime_error
+#include "StringUtils.hpp"			// StringUtils
+#include <string>					// std::string
+#include <vector>					// std::vector
+#include <stdexcept>				// std::runtime_error
 
 void	StringUtils::trim(std::string& str, const char *chars)
 {
@@ -20,7 +20,6 @@ void	StringUtils::trim(std::string& str, const char *chars)
 
 void	StringUtils::trimBraces(std::string& str)
 {
-	
 	size_t start = str.find('{');
 	size_t end = str.rfind('}');
 	size_t len = end - start - 1;

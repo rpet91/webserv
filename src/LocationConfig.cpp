@@ -1,10 +1,10 @@
-#include "Config.hpp"
-#include "LocationConfig.hpp"
-#include "ServerConfig.hpp"
-#include "StringUtils.hpp"
-#include <string>
-#include <vector>
-#include <sstream>
+#include "Config.hpp"				// Config cast
+#include "LocationConfig.hpp"		// LocationConfig
+#include "ServerConfig.hpp"			// Constructor
+#include "StringUtils.hpp"			// StringUtils
+#include <string>					// std::string
+#include <vector>					// std::vector
+#include <stdexcept>				// std::runtime_error
 
 typedef void (LocationConfig::*setFunction)(const std::string&);
 
@@ -89,7 +89,7 @@ LocationConfig&	LocationConfig::operator=(const LocationConfig& src)
 void	LocationConfig::call(const std::string& identifier, const std::string& argument)
 {
 	setFunction function = functionPointers[identifier];
-	if (function == nullptr)
+	if (function == NULL)
 	{
 		std::cerr << "id: " << identifier << std::endl;
 		throw std::runtime_error("configfile: unknown identifier");
