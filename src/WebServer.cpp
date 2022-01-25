@@ -255,12 +255,27 @@ void		WebServer::_findServerForRequest(Client &client)
 	task.client = &client;
 
 	// Find the port and hostname.
+	port = this->_getPortFromSocket(client.fd);
 	host = client.getRequest().getHeader("Host");
 	if (host == "")
 		hostName = client.getAddress();
 	else
-		hostName = host.substr(0, host.find(":"));
-	port = this->_getPortFromSocket(client.fd);
+	{
+		size_t		colonPosition = host.find(":");
+		hostName = host.substr(0, colonPosition);
+
+		// Check if a port was provided, and if it matches the port the request came in on.
+		if (colonPosition != std::string::npos)
+		{
+			std::stringstream		conversionStream;
+			int						givenPort;
+
+			conversionStream << host.substr(colonPosition + 1);
+			conversionStream >> givenPort;
+			if (conversionStream.str().size() == 0 || givenPort != port)
+				client.getResponse().setStatusCode(400);
+		}
+	}
 	client.getRequest().setPort(port);
 
 	// Get the servers for this port.
